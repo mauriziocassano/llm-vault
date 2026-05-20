@@ -225,7 +225,7 @@ if [ ! -f "$VAULT_DIR/.lint/report.md" ]; then
     cat > "$VAULT_DIR/.lint/report.md" <<'EOF'
 # Lint Report
 
-No lint run yet. Run `python .claude/skills/vault-linter/scripts/lint.py`
+No lint run yet. Run `python3 .claude/skills/vault-linter/scripts/lint.py`
 from the vault root.
 EOF
     ok ".lint/report.md"
@@ -342,7 +342,7 @@ if command -v python3 >/dev/null 2>&1; then
         warn "missing Python packages (needed by inbox-fetcher): ${missing[*]}"
         echo "      install with:"
         echo "        pip install trafilatura requests python-slugify beautifulsoup4 lxml markdownify playwright"
-        echo "        python -m playwright install chromium"
+        echo "        python3 -m playwright install chromium"
         echo "      for YouTube transcripts (optional):"
         echo "        brew install yt-dlp    # macOS"
     else
@@ -352,7 +352,7 @@ if command -v python3 >/dev/null 2>&1; then
             echo "      install with: brew install yt-dlp"
         fi
         if ! python3 -c "from playwright.sync_api import sync_playwright" 2>/dev/null; then
-            warn "Playwright browsers not installed — run: python -m playwright install chromium"
+            warn "Playwright browsers not installed — run: python3 -m playwright install chromium"
         fi
     fi
 else
