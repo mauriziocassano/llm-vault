@@ -16,3 +16,17 @@ venv/
 # Obsidian workspace (keep vault files, skip user-specific state)
 .obsidian/workspace*
 .obsidian/cache
+
+# Vault content — not tracked on GitHub
+raw/
+wiki/
+conversations/
+.lint/
+inbox.md
+memory/
+
+# Claude Code local installation (source is in skills/ and commands/)
+.claude/
+
+# Temp
+.tmp/
