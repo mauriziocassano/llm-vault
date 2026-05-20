@@ -18,6 +18,7 @@ agent that reads `CLAUDE.md` or `AGENTS.md`.
 vault-bundle/
 ├── init-vault.sh         bootstrap script (run first)
 ├── CLAUDE.md             the contract between you and the agent (~175 lines)
+├── AGENTS.md             symlink to CLAUDE.md for Codex / OpenAI agents
 ├── GETTING-STARTED.md    10-minute walkthrough for newcomers
 ├── README.md             this file
 ├── skills/
@@ -41,7 +42,7 @@ vault-bundle/
 ## Quick start
 
 ```bash
-git clone https://github.com/maeste/my-2nd-brain.git
+git clone https://github.com/mauriziocassano/maeste-2nd-brain.git
 cd my-2nd-brain
 ./init-vault.sh                    # → ./second-brain-vault
 # or
