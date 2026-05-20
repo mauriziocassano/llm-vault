@@ -39,13 +39,13 @@ are marked as advisory.
 
 ```bash
 # From vault root
-python .claude/skills/vault-linter/scripts/lint.py
+python3 .claude/skills/vault-linter/scripts/lint.py
 
 # Unattended (no prompts)
-python .claude/skills/vault-linter/scripts/lint.py --unattended
+python3 .claude/skills/vault-linter/scripts/lint.py --unattended
 
 # From outside the vault
-python .claude/skills/vault-linter/scripts/lint.py --vault /path/to/vault
+python3 .claude/skills/vault-linter/scripts/lint.py --vault /path/to/vault
 ```
 
 ## Exit codes

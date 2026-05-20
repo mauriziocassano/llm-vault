@@ -117,7 +117,7 @@ Five invariants:
 
 ```bash
 pip install trafilatura requests python-slugify beautifulsoup4 lxml markdownify playwright
-python -m playwright install chromium
+python3 -m playwright install chromium
 ```
 
 For YouTube transcripts (optional):
@@ -140,7 +140,7 @@ pip install matplotlib
 
 ## Troubleshooting
 
-**`python: command not found`** → install Python 3.10+.
+**`python3: command not found`** → install Python 3.10+.
 
 **Inbox fetcher fails on some URLs** → likely a JS-rendered page, a
 paywall, or a walled domain (X/Twitter, LinkedIn, Threads, Facebook,
