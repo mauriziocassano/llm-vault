@@ -153,10 +153,11 @@ then runs an interactive Chrome DevTools MCP pass for each blocked URL
 Obsidian Web Clipper remains a manual fallback if Chrome DevTools MCP
 is unavailable.
 
-**I have local `.md` files I want to add** → drop them in `.tmp/` at
-the vault root, then ask "process the inbox". The fetcher will copy
-them to `raw/docs/<slug>/`, apply vault-standard frontmatter (stripping
-the original), and delete the originals from `.tmp/`.
+**I have local files I want to add** → drop `.md` or `.pdf` files in
+`.tmp/` at the vault root, then ask "process the inbox".
+`.md` files land in `raw/docs/<slug>/` with vault-standard frontmatter.
+`.pdf` files land in `raw/papers/<slug>.pdf` as a direct copy.
+Originals are deleted from `.tmp/` after processing.
 
 **Linter flags many orphan pages early on** → expected. Orphan check
 becomes meaningful when the wiki has >50 pages. Views are

@@ -21,8 +21,8 @@ The agent does the bookkeeping. You do the thinking.
 
 ```
 ┌─────────────┐   ┌─────────────┐
-│  inbox.md   │   │   .tmp/     │
-│  (URLs)     │   │ (local .md) │
+│  inbox.md   │   │    .tmp/      │
+│  (URLs)     │   │ (.md, .pdf)  │
 └──────┬──────┘   └──────┬──────┘
        └────────┬─────────┘
                 │ FETCH (agent processes both)
@@ -83,7 +83,7 @@ language or with a slash command.
 
 | # | Operation | How to trigger | What happens |
 |---|---|---|---|
-| 1 | **FETCH** | *"process the inbox"* | URLs in `inbox.md` → `raw/web/` or `raw/papers/`; local `.md` files from `.tmp/` → `raw/docs/` |
+| 1 | **FETCH** | *"process the inbox"* | URLs in `inbox.md` → `raw/web/` or `raw/papers/`; local `.md` from `.tmp/` → `raw/docs/`; local `.pdf` from `.tmp/` → `raw/papers/` |
 | 2 | **INGEST** | *"ingest the new content"* | `raw/` → summaries in `wiki/sources/`, links in `wiki/pages/` |
 | 3 | **FORGET** | `/forget <source>` or *"forget source X"* | Cascade-remove a source, clean citations in pages and views |
 | 4 | **QUERY** | any question | Agent reads the wiki, answers with citations |

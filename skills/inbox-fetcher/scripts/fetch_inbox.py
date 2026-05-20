@@ -275,10 +275,14 @@ def _download_image(src_abs: str) -> bytes | None:
 # ---------------------------------------------------------------------------
 
 def scan_tmp_dir(tmp_dir: Path) -> list[LocalEntry]:
-    """Return all .md files found in .tmp/. Returns [] if dir is missing."""
+    """Return all .md and .pdf files found in .tmp/. Returns [] if dir is missing."""
     if not tmp_dir.exists():
         return []
-    return [LocalEntry(path=p, filename=p.name) for p in sorted(tmp_dir.glob("*.md"))]
+    files = sorted(
+        [*tmp_dir.glob("*.md"), *tmp_dir.glob("*.pdf")],
+        key=lambda p: p.name,
+    )
+    return [LocalEntry(path=p, filename=p.name) for p in files]
 
 
 def _heading_from_body(body: str) -> str | None:
@@ -350,6 +354,20 @@ def copy_local_file(entry: LocalEntry, docs_dir: Path) -> FetchResult:
         print(f"  ⚠ could not delete {entry.filename} from .tmp/: {e}")
 
     return FetchResult(url=entry.filename, ok=True, kind="local", out_path=out_dir)
+
+
+def copy_local_pdf(entry: LocalEntry, papers_dir: Path) -> FetchResult:
+    """Copy a local .pdf file into raw/papers/<slug>.pdf."""
+    slug = slugify(entry.path.stem)[:80] or "untitled"
+    papers_dir.mkdir(parents=True, exist_ok=True)
+    out_path = papers_dir / f"{slug}.pdf"
+    try:
+        shutil.copy2(entry.path, out_path)
+        entry.path.unlink()
+    except Exception as e:
+        return FetchResult(url=entry.filename, ok=False, kind="failed",
+                           reason=f"could not copy PDF: {e}")
+    return FetchResult(url=entry.filename, ok=True, kind="local_pdf", out_path=out_path)
 
 # ---------------------------------------------------------------------------
 # PDF fetch
@@ -1336,6 +1354,14 @@ def _normalize_done_section(text: str) -> str:
     return text
 
 
+def _rel(path: Path, vault: Path) -> str:
+    """Return path relative to vault if possible, otherwise as-is."""
+    try:
+        return str(path.relative_to(vault))
+    except ValueError:
+        return str(path)
+
+
 def update_inbox(
     inbox_path: Path,
     inbox_text: str,
@@ -1343,6 +1369,7 @@ def update_inbox(
     local_results: list[FetchResult] | None = None,
 ) -> str:
     today = date.today().isoformat()
+    vault = inbox_path.parent
     inbox_text = _normalize_done_section(inbox_text)
     lines = inbox_text.splitlines()
     result_by_url = {r.url: r for r in url_results}
@@ -1360,7 +1387,7 @@ def update_inbox(
             continue
         r = result_by_url[url]
         if r.ok:
-            new_done_lines.append(f"- [x] {url} → `{r.out_path}` ({today})")
+            new_done_lines.append(f"- [x] {url} → `{_rel(r.out_path, vault)}` ({today})")
         else:
             out_lines.append(f"- [ ] {url} ⚠ {r.reason}")
 
@@ -1368,7 +1395,7 @@ def update_inbox(
         for r in local_results:
             if r.ok:
                 new_done_lines.append(
-                    f"- [x] (local) {r.url} → `{r.out_path}` ({today})"
+                    f"- [x] (local) {r.url} → `{_rel(r.out_path, vault)}` ({today})"
                 )
 
     final_lines = list(out_lines)
@@ -1457,7 +1484,10 @@ def process_vault(vault: Path, dry_run: bool = False) -> int:
     local_results: list[FetchResult] = []
     for e in local_entries:
         print(f"\n→ (local) {e.filename}")
-        r = copy_local_file(e, docs_dir)
+        if e.path.suffix.lower() == ".pdf":
+            r = copy_local_pdf(e, papers_dir)
+        else:
+            r = copy_local_file(e, docs_dir)
         local_results.append(r)
         if r.ok:
             print(f"  ✓ local → {r.out_path}")
@@ -1472,7 +1502,9 @@ def process_vault(vault: Path, dry_run: bool = False) -> int:
     n_html = sum(1 for r in url_results if r.ok and r.kind == "html")
     n_pdf = sum(1 for r in url_results if r.ok and r.kind == "pdf")
     n_yt = sum(1 for r in url_results if r.ok and r.kind == "youtube")
-    n_local = sum(1 for r in local_results if r.ok)
+    n_local_md = sum(1 for r in local_results if r.ok and r.kind == "local")
+    n_local_pdf = sum(1 for r in local_results if r.ok and r.kind == "local_pdf")
+    n_local = n_local_md + n_local_pdf
     n_blocked = sum(1 for r in url_results if r.kind == "blocked")
     n_fail = sum(
         1 for r in [*url_results, *local_results] if not r.ok and r.kind == "failed"
@@ -1486,8 +1518,10 @@ def process_vault(vault: Path, dry_run: bool = False) -> int:
         print(f"  ✓ {n_pdf} PDF(s) → raw/papers/")
     if n_yt:
         print(f"  ✓ {n_yt} YouTube transcript(s) → raw/web/")
-    if n_local:
-        print(f"  ✓ {n_local} local file(s) → raw/docs/")
+    if n_local_md:
+        print(f"  ✓ {n_local_md} local .md file(s) → raw/docs/")
+    if n_local_pdf:
+        print(f"  ✓ {n_local_pdf} local .pdf file(s) → raw/papers/")
     if n_blocked:
         print(f"  ⚠ {n_blocked} blocked (login wall) — agent Chrome DevTools MCP pass required")
     if n_fail:
