@@ -275,9 +275,16 @@ After Phase 2, the placeholder is replaced with:
 
 After Phase 2, `transcribed: true` and all `<!--FIG:N-->` placeholders are replaced.
 
-## Local .md files (.tmp/)
+## Local files (.tmp/)
 
-Files dropped into `.tmp/` are processed on each run (no inbox entry needed):
+`.md` and `.pdf` files dropped into `.tmp/` are processed on each run (no inbox entry needed):
+
+| File type | Output | Notes |
+|---|---|---|
+| `.md` | `raw/docs/<slug>/index.md` | Frontmatter parsed; vault schema applied |
+| `.pdf` | `raw/papers/<slug>.pdf` | Binary copy; slug from filename stem |
+
+**For `.md` files:**
 
 1. Read the file; parse any YAML frontmatter.
 2. Extract title: frontmatter `title` → first `# Heading` → filename stem.
@@ -294,7 +301,14 @@ Files dropped into `.tmp/` are processed on each run (no inbox entry needed):
    ---
    ```
 5. Delete the file from `.tmp/`.
-6. Append `- [x] (local) filename → raw/docs/<slug>/ (date)` to `## Done`.
+6. Append `- [x] (local) filename.md → raw/docs/<slug>/ (date)` to `## Done`.
+
+**For `.pdf` files:**
+
+1. Generate slug from filename stem.
+2. Copy to `raw/papers/<slug>.pdf`.
+3. Delete the file from `.tmp/`.
+4. Append `- [x] (local) filename.pdf → raw/papers/<slug>.pdf (date)` to `## Done`.
 
 ## YouTube URLs
 
