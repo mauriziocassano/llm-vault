@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-fetch_inbox.py — Process inbox.md and populate raw/web/ (and raw/papers/ for PDFs).
+fetch_inbox.py — Process inbox.md and .tmp/ for a second brain vault.
+
+Sources:
+  - inbox.md: unchecked URLs → raw/web/ (HTML) or raw/papers/ (PDF)
+  - .tmp/: local .md files → raw/docs/<slug>/
 
 Usage:
     python fetch_inbox.py                    # uses current dir as vault
     python fetch_inbox.py --vault /path      # explicit vault path
     python fetch_inbox.py --dry-run          # shows what would be done
 
-Reads `inbox.md` from the vault root, finds unchecked URL entries,
-fetches each, and writes clean markdown + images to raw/web/<slug>/.
-PDFs go to raw/papers/<slug>.pdf.
-
-Idempotent: already-processed URLs are skipped.
+Idempotent for URLs: already-processed URLs (marked [x]) are skipped.
+Local files in .tmp/ are always processed and deleted on success.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse, urljoin
 
-# --- Dependency check with friendly error -----------------------------------
+# --- Dependency check -------------------------------------------------------
 
 MISSING_DEPS = []
 try:
@@ -57,10 +58,16 @@ class InboxEntry:
 
 
 @dataclass
+class LocalEntry:
+    path: Path
+    filename: str
+
+
+@dataclass
 class FetchResult:
     url: str
     ok: bool
-    kind: str  # "html" | "pdf" | "failed"
+    kind: str  # "html" | "pdf" | "local" | "failed"
     out_path: Path | None = None
     reason: str | None = None
 
@@ -78,10 +85,8 @@ USER_AGENT = (
 
 UNCHECKED_PATTERN = re.compile(r"^- \[ \] (https?://\S+)\s*$")
 IMG_PATTERN = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
 
-# Domains known to block plain HTTP fetchers (auth walls, aggressive
-# anti-bot, or JS-only rendering). Skip trafilatura entirely and mark
-# the URL for agent-driven Playwright MCP fallback.
 WALLED_DOMAINS = frozenset({
     "x.com",
     "twitter.com",
@@ -99,15 +104,127 @@ WALLED_DOMAINS = frozenset({
 PLAYWRIGHT_HINT = "try playwright"
 
 
-# --- Core operations --------------------------------------------------------
+# --- Utilities --------------------------------------------------------------
+
+def yaml_escape(s: str) -> str:
+    """Minimal YAML string escape: quote if it contains special chars."""
+    if any(c in s for c in ":#\"'\n"):
+        return '"' + s.replace('"', '\\"').replace("\n", " ") + '"'
+    return s
+
+
+def extract_frontmatter(text: str) -> tuple[dict, str]:
+    """Parse YAML frontmatter from a markdown file.
+
+    Returns (meta_dict, body_without_frontmatter).
+    Simple key: value parsing — no full YAML library required.
+    """
+    if not text.startswith("---"):
+        return {}, text
+    match = FRONTMATTER_RE.match(text)
+    if not match:
+        return {}, text
+    fm_block = match.group(1)
+    body = text[match.end():]
+    meta: dict[str, str] = {}
+    for line in fm_block.splitlines():
+        if ":" in line:
+            k, _, v = line.partition(":")
+            meta[k.strip()] = v.strip().strip('"').strip("'")
+    return meta, body
+
+
+# --- Local file handling ----------------------------------------------------
+
+def scan_tmp_dir(tmp_dir: Path) -> list[LocalEntry]:
+    """Return all .md files found in .tmp/. Returns [] if dir is missing."""
+    if not tmp_dir.exists():
+        return []
+    return [
+        LocalEntry(path=p, filename=p.name)
+        for p in sorted(tmp_dir.glob("*.md"))
+    ]
+
+
+def _heading_from_body(body: str) -> str | None:
+    """Return text of the first # heading in body, or None."""
+    for line in body.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("# "):
+            return stripped[2:].strip()
+    return None
+
+
+def copy_local_file(entry: LocalEntry, docs_dir: Path) -> FetchResult:
+    """Copy a local .md file into raw/docs/<slug>/index.md.
+
+    Strips the original frontmatter, extracts metadata from it, and
+    writes a vault-standard frontmatter. The original file is deleted
+    from .tmp/ on success.
+    """
+    try:
+        text = entry.path.read_text(encoding="utf-8")
+    except Exception as e:
+        return FetchResult(url=entry.filename, ok=False, kind="failed",
+                           reason=f"could not read file: {e}")
+
+    meta, body = extract_frontmatter(text)
+
+    # Title: frontmatter > first # heading > filename stem
+    title = (
+        meta.get("title")
+        or _heading_from_body(body)
+        or entry.path.stem
+    )
+    author = meta.get("author", "")
+    source = meta.get("source", "")
+    publish_date = meta.get("publish_date", "") or meta.get("date", "")
+
+    slug = slugify(title)[:80] or slugify(entry.path.stem)[:80] or "untitled"
+    out_dir = docs_dir / slug
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    fm_lines = [
+        "---",
+        f"source_file: {entry.filename}",
+        f"title: {yaml_escape(title)}",
+    ]
+    if author:
+        fm_lines.append(f"author: {yaml_escape(author)}")
+    if source:
+        fm_lines.append(f"source: {yaml_escape(source)}")
+    if publish_date:
+        fm_lines.append(f"publish_date: {publish_date}")
+    fm_lines.append(f"fetched: {date.today().isoformat()}")
+    fm_lines.append("---")
+    frontmatter = "\n".join(fm_lines) + "\n\n"
+
+    body_stripped = body.strip()
+    # Don't duplicate a # heading that's already the first line of body
+    if body_stripped.startswith("# "):
+        content = body_stripped + "\n"
+    else:
+        content = (f"# {title}\n\n{body_stripped}\n"
+                   if body_stripped else f"# {title}\n")
+
+    (out_dir / "index.md").write_text(frontmatter + content, encoding="utf-8")
+
+    try:
+        entry.path.unlink()
+    except Exception as e:
+        print(f"  ⚠ could not delete {entry.filename} from .tmp/: {e}")
+
+    return FetchResult(url=entry.filename, ok=True, kind="local", out_path=out_dir)
+
+
+# --- URL operations ---------------------------------------------------------
 
 def find_unchecked_entries(inbox_text: str) -> list[InboxEntry]:
     """Parse inbox.md and return list of unchecked URL entries.
-    
-    HTML comments (<!-- ... -->) are stripped before parsing so example
-    URLs inside comments are not picked up.
+
+    HTML comments are stripped first so example URLs inside comments
+    are not picked up.
     """
-    # Strip HTML comments (including multi-line) before parsing
     stripped = re.sub(r"<!--.*?-->", "", inbox_text, flags=re.DOTALL)
     entries = []
     for i, line in enumerate(stripped.splitlines()):
@@ -138,9 +255,6 @@ def rewrite_url_for_fetch(url: str) -> tuple[str, str | None]:
     Returns (fetch_url, slug_override). When slug_override is non-None
     it is used as the raw-file slug verbatim (bypassing slugify) so
     canonical identifiers like arxiv paper IDs survive intact.
-
-    Arxiv abstract and HTML URLs are rewritten to the PDF endpoint so
-    we archive the paper itself instead of the landing page.
     """
     parsed = urlparse(url)
     host = parsed.netloc.lower().removeprefix("www.")
@@ -227,20 +341,20 @@ def fetch_html(url: str, web_dir: Path) -> FetchResult:
 
     md_with_local_images = download_images(result, assets_dir, base_url=url)
 
-    frontmatter_lines = [
+    fm_lines = [
         "---",
         f"source_url: {url}",
         f"title: {yaml_escape(title) if title else 'Untitled'}",
     ]
     if author:
-        frontmatter_lines.append(f"author: {yaml_escape(author)}")
+        fm_lines.append(f"author: {yaml_escape(author)}")
     if pub_date:
-        frontmatter_lines.append(f"published: {pub_date}")
+        fm_lines.append(f"published: {pub_date}")
     if language:
-        frontmatter_lines.append(f"language: {language}")
-    frontmatter_lines.append(f"fetched: {date.today().isoformat()}")
-    frontmatter_lines.append("---")
-    frontmatter = "\n".join(frontmatter_lines) + "\n\n"
+        fm_lines.append(f"language: {language}")
+    fm_lines.append(f"fetched: {date.today().isoformat()}")
+    fm_lines.append("---")
+    frontmatter = "\n".join(fm_lines) + "\n\n"
 
     body = f"# {title or 'Untitled'}\n\n{md_with_local_images}\n"
     (out_dir / "index.md").write_text(frontmatter + body, encoding="utf-8")
@@ -253,7 +367,6 @@ def download_images(md: str, assets_dir: Path, base_url: str) -> str:
 
     def replace(match: re.Match) -> str:
         alt, src = match.group(1), match.group(2)
-        # Resolve relative URLs against the page URL
         if not src.startswith(("http://", "https://")):
             src_abs = urljoin(base_url, src)
         else:
@@ -266,10 +379,9 @@ def download_images(md: str, assets_dir: Path, base_url: str) -> str:
             )
             r.raise_for_status()
         except Exception:
-            return match.group(0)  # keep original link on failure
-
+            return match.group(0)
         ext = Path(urlparse(src_abs).path).suffix or ".png"
-        if len(ext) > 6:  # weird extension, fallback
+        if len(ext) > 6:
             ext = ".png"
         name = hashlib.sha1(src_abs.encode()).hexdigest()[:12] + ext
         (assets_dir / name).write_bytes(r.content)
@@ -278,33 +390,66 @@ def download_images(md: str, assets_dir: Path, base_url: str) -> str:
     return IMG_PATTERN.sub(replace, md)
 
 
-def yaml_escape(s: str) -> str:
-    """Minimal YAML string escape: quote if it contains special chars."""
-    if any(c in s for c in ":#\"'\n"):
-        return '"' + s.replace('"', '\\"').replace("\n", " ") + '"'
-    return s
-
-
 # --- Inbox rewriting --------------------------------------------------------
+
+def _normalize_done_section(text: str) -> str:
+    """Unify ## Processati and ## Done into a single ## Done section."""
+    has_done = "## Done" in text
+    has_processati = "## Processati" in text
+
+    if not has_processati:
+        return text
+
+    if not has_done:
+        return text.replace("## Processati", "## Done", 1)
+
+    # Both exist: move Processati content into Done, remove Processati header.
+    lines = text.splitlines(keepends=True)
+
+    processati_idx = next(
+        (i for i, l in enumerate(lines) if l.strip() == "## Processati"), None
+    )
+    if processati_idx is None:
+        return text
+
+    next_section = next(
+        (i for i in range(processati_idx + 1, len(lines))
+         if lines[i].startswith("## ")),
+        len(lines),
+    )
+    processati_content = lines[processati_idx + 1 : next_section]
+    del lines[processati_idx : next_section]
+
+    done_idx = next(
+        (i for i, l in enumerate(lines) if l.strip() == "## Done"), None
+    )
+    if done_idx is None:
+        return "".join(lines)
+
+    done_end = next(
+        (i for i in range(done_idx + 1, len(lines))
+         if lines[i].startswith("## ")),
+        len(lines),
+    )
+    for j, content_line in enumerate(processati_content):
+        lines.insert(done_end + j, content_line)
+
+    return "".join(lines)
+
 
 def update_inbox(
     inbox_path: Path,
     inbox_text: str,
-    results: list[FetchResult],
+    url_results: list[FetchResult],
+    local_results: list[FetchResult] | None = None,
 ) -> str:
-    """
-    Rewrite inbox.md:
-    - successful URLs are moved under '## Processati'
-    - failed URLs stay unchecked with a ⚠ reason appended inline
-    """
-    lines = inbox_text.splitlines()
     today = date.today().isoformat()
 
-    # Build result lookup by URL
-    result_by_url = {r.url: r for r in results}
+    inbox_text = _normalize_done_section(inbox_text)
+    lines = inbox_text.splitlines()
 
-    # Remove the processed unchecked lines; collect new "Processati" entries
-    new_processed_lines: list[str] = []
+    result_by_url = {r.url: r for r in url_results}
+    new_done_lines: list[str] = []
     out_lines: list[str] = []
 
     for line in lines:
@@ -312,34 +457,33 @@ def update_inbox(
         if not match:
             out_lines.append(line)
             continue
-
         url = match.group(1).strip()
         if url not in result_by_url:
             out_lines.append(line)
             continue
-
         result = result_by_url[url]
         if result.ok:
-            # vault-relative path for readability
-            rel = result.out_path
-            new_processed_lines.append(
-                f"- [x] {url} → `{rel}` ({today})"
+            new_done_lines.append(
+                f"- [x] {url} → `{result.out_path}` ({today})"
             )
         else:
             out_lines.append(f"- [ ] {url} ⚠ {result.reason}")
 
-    # Ensure "## Processati" section exists; append new entries there
+    if local_results:
+        for r in local_results:
+            if r.ok:
+                new_done_lines.append(
+                    f"- [x] (local) {r.url} → `{r.out_path}` ({today})"
+                )
+
     final_lines = list(out_lines)
-    if new_processed_lines:
-        if not any(l.strip() == "## Processati" for l in final_lines):
+    if new_done_lines:
+        if not any(l.strip() == "## Done" for l in final_lines):
             if final_lines and final_lines[-1].strip():
                 final_lines.append("")
-            final_lines.append("## Processati")
+            final_lines.append("## Done")
             final_lines.append("")
-
-        # Find the section and append at the end of it (end of file is fine)
-        # Simple approach: append to the very end
-        final_lines.extend(new_processed_lines)
+        final_lines.extend(new_done_lines)
 
     return "\n".join(final_lines) + ("\n" if inbox_text.endswith("\n") else "")
 
@@ -354,22 +498,28 @@ def process_vault(vault: Path, dry_run: bool = False) -> int:
 
     web_dir = vault / "raw" / "web"
     papers_dir = vault / "raw" / "papers"
+    docs_dir = vault / "raw" / "docs"
+    tmp_dir = vault / ".tmp"
 
     inbox_text = inbox_path.read_text(encoding="utf-8")
-    entries = find_unchecked_entries(inbox_text)
+    url_entries = find_unchecked_entries(inbox_text)
+    local_entries = scan_tmp_dir(tmp_dir)
 
-    if not entries:
+    if not url_entries and not local_entries:
         print("Inbox empty. Nothing to do.")
         return 0
 
-    print(f"Found {len(entries)} URL(s) to process.")
     if dry_run:
-        for e in entries:
-            print(f"  would fetch: {e.url}")
+        for e in url_entries:
+            print(f"  would fetch URL: {e.url}")
+        for e in local_entries:
+            print(f"  would copy local: {e.filename}")
         return 0
 
-    results: list[FetchResult] = []
-    for e in entries:
+    print(f"Found {len(url_entries)} URL(s) and {len(local_entries)} local file(s).")
+
+    url_results: list[FetchResult] = []
+    for e in url_entries:
         fetch_url, slug_override = rewrite_url_for_fetch(e.url)
         if fetch_url != e.url:
             print(f"\n→ {e.url}\n  (fetching as → {fetch_url})")
@@ -387,35 +537,49 @@ def process_vault(vault: Path, dry_run: bool = False) -> int:
         else:
             r = fetch_html(fetch_url, web_dir)
 
-        # Track by the original inbox URL, not the rewritten fetch URL,
-        # so update_inbox can match the line back.
         r.url = e.url
-        results.append(r)
+        url_results.append(r)
         if r.ok:
             print(f"  ✓ {r.kind} → {r.out_path}")
         else:
             print(f"  ⚠ {r.reason}")
 
-    new_text = update_inbox(inbox_path, inbox_text, results)
+    local_results: list[FetchResult] = []
+    for e in local_entries:
+        print(f"\n→ (local) {e.filename}")
+        r = copy_local_file(e, docs_dir)
+        local_results.append(r)
+        if r.ok:
+            print(f"  ✓ local → {r.out_path}")
+        else:
+            print(f"  ⚠ {r.reason}")
+
+    new_text = update_inbox(inbox_path, inbox_text, url_results, local_results)
     inbox_path.write_text(new_text, encoding="utf-8")
 
-    # Summary
-    n_html = sum(1 for r in results if r.ok and r.kind == "html")
-    n_pdf = sum(1 for r in results if r.ok and r.kind == "pdf")
-    n_fail = sum(1 for r in results if not r.ok)
-    print()
-    print(f"Processed {len(results)} URLs:")
-    print(f"  ✓ {n_html} HTML article(s) → raw/web/")
-    print(f"  ✓ {n_pdf} PDF(s) → raw/papers/")
-    if n_fail:
-        print(f"  ⚠ {n_fail} failed (see inbox.md for reasons)")
+    n_html = sum(1 for r in url_results if r.ok and r.kind == "html")
+    n_pdf = sum(1 for r in url_results if r.ok and r.kind == "pdf")
+    n_local = sum(1 for r in local_results if r.ok)
+    n_fail = sum(1 for r in [*url_results, *local_results] if not r.ok)
+    total = n_html + n_pdf + n_local
 
-    return 0 if n_fail == 0 else 2  # 2 = partial success
+    print()
+    print(f"Processed {total} item(s):")
+    if n_html:
+        print(f"  ✓ {n_html} HTML article(s) → raw/web/")
+    if n_pdf:
+        print(f"  ✓ {n_pdf} PDF(s) → raw/papers/")
+    if n_local:
+        print(f"  ✓ {n_local} local file(s) → raw/docs/")
+    if n_fail:
+        print(f"  ⚠ {n_fail} failed (see inbox.md for details)")
+
+    return 0 if n_fail == 0 else 2
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Fetch URLs from inbox.md into raw/ as markdown."
+        description="Fetch URLs from inbox.md and .md files from .tmp/ into raw/."
     )
     parser.add_argument(
         "--vault",
@@ -426,7 +590,7 @@ def main() -> int:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="List URLs that would be fetched, don't download.",
+        help="List items that would be processed, don't fetch.",
     )
     args = parser.parse_args()
 

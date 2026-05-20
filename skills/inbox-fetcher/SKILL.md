@@ -1,11 +1,14 @@
 ---
 name: inbox-fetcher
-description: Processes a queue of URLs listed in inbox.md for a second brain vault, downloading each page as clean markdown in raw/web/<slug>/index.md with images in an assets/ subdirectory. Use this skill whenever the user mentions "inbox", "fetch", "process links", "scrape URLs", "download articles", or adds URLs to inbox.md. Run this BEFORE any ingest operation so the agent has clean raw files to work from. Handles HTML articles via trafilatura, direct PDF downloads, and per-URL failures (paywalls, JS-rendered pages, timeouts) gracefully without blocking the rest of the queue. Walled domains (X/Twitter, LinkedIn, Threads, Facebook, Instagram) are flagged for an agent-driven Playwright MCP fallback instead of being attempted with trafilatura. Arxiv abstract/html URLs are rewritten to the PDF endpoint so the paper itself is archived, not the landing page.
+description: Processes a queue of URLs listed in inbox.md and local .md files dropped in .tmp/ for a second brain vault. URLs are downloaded as clean markdown into raw/web/<slug>/index.md (HTML) or raw/papers/ (PDF). Local .md files from .tmp/ are copied into raw/docs/<slug>/index.md with vault-standard frontmatter, then deleted from .tmp/. Use this skill whenever the user mentions "inbox", "fetch", "process links", "scrape URLs", "download articles", adds URLs to inbox.md, or drops files into .tmp/. Run this BEFORE any ingest operation so the agent has clean raw files to work from. Handles HTML articles via trafilatura, direct PDF downloads, and per-item failures gracefully without blocking the rest of the queue. Walled domains (X/Twitter, LinkedIn, Threads, Facebook, Instagram) are flagged for an agent-driven Playwright MCP fallback. Arxiv abstract/html URLs are rewritten to the PDF endpoint so the paper itself is archived, not the landing page.
 ---
 
 # Inbox Fetcher
 
-Processes a queue of URLs from `inbox.md` into clean markdown files under `raw/web/`, ready for ingest into the wiki.
+Processes two input channels into clean files under `raw/`, ready for ingest into the wiki:
+
+1. **URLs** from `inbox.md` → `raw/web/` (HTML) or `raw/papers/` (PDF)
+2. **Local `.md` files** from `.tmp/` → `raw/docs/`
 
 ## When to use this skill
 
@@ -13,8 +16,8 @@ Trigger whenever the user:
 
 - Says "process the inbox", "fetch the inbox", "scrape the links", "download these URLs"
 - Adds URLs to `inbox.md` and asks to prepare them
+- Drops `.md` files into `.tmp/` and asks to fetch or process them
 - Asks to ingest web content and the vault has an `inbox.md` file
-- Wants to refresh or re-fetch a URL already in the inbox
 
 This skill is a **pre-ingest step**. After it runs, the user (or the agent following the vault's `CLAUDE.md`) performs the actual ingest — reading the new files in `raw/` and compiling them into the wiki.
 
@@ -25,9 +28,11 @@ The skill expects this layout:
 ```
 <vault>/
 ├── inbox.md              queue of URLs (checkbox format)
+├── .tmp/                 drop local .md files here for processing
 ├── raw/
 │   ├── web/              HTML article output
-│   └── papers/           direct PDF downloads
+│   ├── papers/           direct PDF downloads
+│   └── docs/             local .md file output
 └── .claude/
     └── skills/
         └── inbox-fetcher/
@@ -36,7 +41,7 @@ The skill expects this layout:
                 └── fetch_inbox.py
 ```
 
-The skill creates `raw/web/` and `raw/papers/` if they don't exist.
+All `raw/` subdirectories are created on demand if missing. `.tmp/` is optional — if absent, local processing is silently skipped.
 
 ## Inbox format
 
@@ -52,17 +57,20 @@ The skill creates `raw/web/` and `raw/papers/` if they don't exist.
   - tags: agent-skills, spec
   - note: focus on composition
 
-## Processed
+## Done
 
 - [x] https://old-url.com → `raw/web/old-url-slug/` (2026-04-15)
+- [x] (local) my-notes.md → `raw/docs/my-notes/` (2026-05-20)
 ```
 
 Rules:
 
-- Only lines matching `- [ ] <URL>` at the start (unchecked) are processed.
+- Only lines matching `- [ ] <URL>` at the start (unchecked) are processed for URLs.
+- Local files are picked up from `.tmp/` directly — no inbox entry needed.
 - Indented sub-bullets (tags, notes) are preserved but not parsed — they're hints for the ingest step.
-- After a successful fetch, the line moves to "Processed" and gets marked `- [x]` with the output path and date.
-- Failed fetches get an inline `⚠ <reason>` suffix and stay unchecked so the user can decide.
+- After a successful fetch, URL lines move to `## Done` marked `- [x]` with output path and date. Local files also appear there.
+- Failed URL fetches get an inline `⚠ <reason>` suffix and stay unchecked.
+- If `## Processati` exists in inbox.md, it is automatically renamed/merged into `## Done` on the next run.
 
 ## How to run it
 
@@ -90,7 +98,28 @@ The script is idempotent: already-processed URLs (marked `[x]`) are skipped. To 
 4. **Slug generation.** For rewritten URLs, use the override slug (e.g. `arxiv-2405.12345`). Otherwise prefer the article title, fallback to `<hostname>-<hash8>`.
 5. **Image download.** Parse `![alt](url)` patterns, download each image into `raw/web/<slug>/assets/` with a hash-based filename, rewrite paths to local.
 6. **Frontmatter.** Prepend YAML with `source_url`, `title`, `author`, `fetched`, `language`.
-7. **Inbox update.** On success, move to "Processed". On failure, append ⚠ with reason.
+7. **Inbox update.** On success, move to `## Done`. On failure, append ⚠ with reason.
+
+## What the script does per local file (.tmp/)
+
+1. **Scan `.tmp/`** for `*.md` files (sorted alphabetically). Non-.md files are ignored.
+2. **Extract frontmatter.** If the file starts with `---`, parse key: value pairs. Fields used: `title`, `author`, `source`, `publish_date`. The original frontmatter is always discarded from output.
+3. **Determine title** (priority): frontmatter `title` → first `# Heading` in body → filename stem.
+4. **Generate slug** from title via `slugify`.
+5. **Write `raw/docs/<slug>/index.md`** with vault-standard frontmatter:
+   ```yaml
+   ---
+   source_file: original-filename.md
+   title: Extracted title
+   author: if present in original frontmatter
+   source: if present in original frontmatter
+   publish_date: if present in original frontmatter
+   fetched: YYYY-MM-DD
+   ---
+   ```
+   Followed by the body (original frontmatter stripped). If the body already starts with a `# heading`, it is preserved as-is without duplication.
+6. **Delete** the file from `.tmp/`.
+7. **Inbox update.** Append `- [x] (local) filename → raw/docs/<slug>/ (date)` to `## Done`.
 
 ## Dependencies
 
