@@ -87,6 +87,8 @@ info "Creating folder structure"
 DIRS=(
     "raw/papers"
     "raw/web"
+    "raw/docs"
+    ".tmp"
     "wiki/pages"
     "wiki/sources"
     "wiki/views/assets"
@@ -101,7 +103,7 @@ for d in "${DIRS[@]}"; do
     mkdir -p "$VAULT_DIR/$d"
 done
 
-for d in raw/papers raw/web wiki/pages wiki/sources wiki/views wiki/views/assets conversations .lint; do
+for d in raw/papers raw/web raw/docs wiki/pages wiki/sources wiki/views wiki/views/assets conversations .lint; do
     [ -f "$VAULT_DIR/$d/.gitkeep" ] || touch "$VAULT_DIR/$d/.gitkeep"
 done
 ok "directories"

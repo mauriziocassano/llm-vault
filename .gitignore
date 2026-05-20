@@ -24,6 +24,7 @@ conversations/
 .lint/
 inbox.md
 memory/
+CHANGELOG.md
 
 # Claude Code local installation (source is in skills/ and commands/)
 .claude/

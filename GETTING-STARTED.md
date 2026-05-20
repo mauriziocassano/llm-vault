@@ -20,14 +20,19 @@ The agent does the bookkeeping. You do the thinking.
 ## The whole thing in one diagram
 
 ```
-┌─────────────┐
-│  inbox.md   │  ← you add URLs here
-└──────┬──────┘
-       │ FETCH (agent pulls the URLs)
-       ▼
-┌─────────────┐
-│   raw/      │  ← immutable sources (PDFs, web clips)
-└──────┬──────┘
+┌─────────────┐   ┌─────────────┐
+│  inbox.md   │   │   .tmp/     │
+│  (URLs)     │   │ (local .md) │
+└──────┬──────┘   └──────┬──────┘
+       └────────┬─────────┘
+                │ FETCH (agent processes both)
+                ▼
+┌─────────────────────────────────────┐
+│   raw/                              │
+│     web/     ← HTML articles        │
+│     papers/  ← PDFs                 │
+│     docs/    ← local .md files      │
+└──────┬──────────────────────────────┘
        │ INGEST (agent reads, writes summaries)
        ▼
 ┌──────────────────────────────────────┐
@@ -78,7 +83,7 @@ language or with a slash command.
 
 | # | Operation | How to trigger | What happens |
 |---|---|---|---|
-| 1 | **FETCH** | *"process the inbox"* | URLs in `inbox.md` → `raw/web/` |
+| 1 | **FETCH** | *"process the inbox"* | URLs in `inbox.md` → `raw/web/` or `raw/papers/`; local `.md` files from `.tmp/` → `raw/docs/` |
 | 2 | **INGEST** | *"ingest the new content"* | `raw/` → summaries in `wiki/sources/`, links in `wiki/pages/` |
 | 3 | **FORGET** | `/forget <source>` or *"forget source X"* | Cascade-remove a source, clean citations in pages and views |
 | 4 | **QUERY** | any question | Agent reads the wiki, answers with citations |
@@ -106,8 +111,9 @@ For everything else, just ask in plain language.
 ## First week
 
 **Day 1: bootstrap.** Run `./init-vault.sh`. Add 5-10 URLs to
-`inbox.md`. Tell the agent: *"process the inbox, then ingest the new
-content"*. You'll have your first few pages and sources.
+`inbox.md`, or drop local `.md` files in `.tmp/`. Tell the agent:
+*"process the inbox, then ingest the new content"*. You'll have your
+first few pages and sources.
 
 **Day 2-3: ask questions.** The wiki is small but already useful.
 Ask things that require synthesis across sources. Notice when the

@@ -21,7 +21,7 @@ vault-bundle/
 ├── GETTING-STARTED.md    10-minute walkthrough for newcomers
 ├── README.md             this file
 ├── skills/
-│   ├── inbox-fetcher/    URL → markdown in raw/
+│   ├── inbox-fetcher/    URLs + local .md files → raw/
 │   ├── vault-linter/     9 deterministic health checks
 │   └── view-builder/     timelines, comparisons, charts, slides, reports, posts
 ├── commands/
@@ -142,6 +142,11 @@ Playwright MCP (one URL at a time, with your confirmation). See the
 *Playwright fallback* section in `skills/inbox-fetcher/SKILL.md`.
 Obsidian Web Clipper remains a manual fallback if Playwright MCP is
 unavailable.
+
+**I have local `.md` files I want to add** → drop them in `.tmp/` at
+the vault root, then ask "process the inbox". The fetcher will copy
+them to `raw/docs/<slug>/`, apply vault-standard frontmatter (stripping
+the original), and delete the originals from `.tmp/`.
 
 **Linter flags many orphan pages early on** → expected. Orphan check
 becomes meaningful when the wiki has >50 pages. Views are
