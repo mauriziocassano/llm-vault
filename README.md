@@ -21,9 +21,10 @@ vault-bundle/
 ├── GETTING-STARTED.md    10-minute walkthrough for newcomers
 ├── README.md             this file
 ├── skills/
-│   ├── inbox-fetcher/    URLs + local .md files → raw/
-│   ├── vault-linter/     9 deterministic health checks
-│   └── view-builder/     timelines, comparisons, charts, slides, reports, posts
+│   ├── inbox-fetcher/         two-phase: Playwright + agent vision → raw/
+│   ├── inbox-fetcher-legacy/  original trafilatura-only fetcher (fallback)
+│   ├── vault-linter/          9 deterministic health checks
+│   └── view-builder/          timelines, comparisons, charts, slides, reports, posts
 ├── commands/
 │   ├── save.md           /save
 │   ├── view.md           /view
@@ -112,10 +113,17 @@ Five invariants:
 
 ## Dependencies
 
-**For `inbox-fetcher`** (Python):
+**For `inbox-fetcher`** (Python + Playwright):
 
 ```bash
-pip install trafilatura requests python-slugify
+pip install trafilatura requests python-slugify beautifulsoup4 lxml markdownify playwright
+python -m playwright install chromium
+```
+
+For YouTube transcripts (optional):
+
+```bash
+brew install yt-dlp    # macOS
 ```
 
 **For `vault-linter`** and **`view-builder`**:
@@ -134,14 +142,16 @@ pip install matplotlib
 
 **`python: command not found`** → install Python 3.10+.
 
-**Inbox fetcher fails on some URLs** → likely paywall, JS-rendered, or
-a walled domain (X/Twitter, LinkedIn, Threads, Facebook, Instagram).
-The fetcher marks these `⚠ ... — try playwright` and leaves them
-unchecked. The agent can then fetch them interactively via the
-Playwright MCP (one URL at a time, with your confirmation). See the
-*Playwright fallback* section in `skills/inbox-fetcher/SKILL.md`.
-Obsidian Web Clipper remains a manual fallback if Playwright MCP is
-unavailable.
+**Inbox fetcher fails on some URLs** → likely a JS-rendered page, a
+paywall, or a walled domain (X/Twitter, LinkedIn, Threads, Facebook,
+Instagram). The fetcher already makes one headless Playwright attempt
+automatically. If that is blocked (login wall), it marks the URL
+`⚠ blocked — chrome-devtools-mcp` and leaves it unchecked. The agent
+then runs an interactive Chrome DevTools MCP pass for each blocked URL
+(one confirmation per URL), using your real browser session. See the
+*Chrome DevTools MCP protocol* section in `skills/inbox-fetcher/SKILL.md`.
+Obsidian Web Clipper remains a manual fallback if Chrome DevTools MCP
+is unavailable.
 
 **I have local `.md` files I want to add** → drop them in `.tmp/` at
 the vault root, then ask "process the inbox". The fetcher will copy

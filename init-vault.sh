@@ -259,12 +259,16 @@ fi
 # --- Skills ----------------------------------------------------------------
 info "Installing skills"
 
-# inbox-fetcher
+# inbox-fetcher (two-phase vision-enhanced)
 if [ -d "$SCRIPT_DIR/skills/inbox-fetcher" ]; then
     cp "$SCRIPT_DIR/skills/inbox-fetcher/SKILL.md" \
        "$VAULT_DIR/.claude/skills/inbox-fetcher/SKILL.md"
     cp "$SCRIPT_DIR/skills/inbox-fetcher/scripts/fetch_inbox.py" \
        "$VAULT_DIR/.claude/skills/inbox-fetcher/scripts/fetch_inbox.py"
+    cp "$SCRIPT_DIR/skills/inbox-fetcher/scripts/_strip.py" \
+       "$VAULT_DIR/.claude/skills/inbox-fetcher/scripts/_strip.py"
+    cp "$SCRIPT_DIR/skills/inbox-fetcher/scripts/extract_charts.py" \
+       "$VAULT_DIR/.claude/skills/inbox-fetcher/scripts/extract_charts.py"
     chmod +x "$VAULT_DIR/.claude/skills/inbox-fetcher/scripts/fetch_inbox.py"
     ok "skill: inbox-fetcher"
 else
@@ -329,16 +333,27 @@ info "Checking Python dependencies"
 if command -v python3 >/dev/null 2>&1; then
     ok "python3 found: $(python3 --version 2>&1)"
     missing=()
-    for pkg in trafilatura requests slugify; do
+    for pkg in trafilatura requests slugify bs4 markdownify playwright; do
         if ! python3 -c "import $pkg" 2>/dev/null; then
             missing+=("$pkg")
         fi
     done
     if [ ${#missing[@]} -gt 0 ]; then
         warn "missing Python packages (needed by inbox-fetcher): ${missing[*]}"
-        echo "      install with: pip install trafilatura requests python-slugify"
+        echo "      install with:"
+        echo "        pip install trafilatura requests python-slugify beautifulsoup4 lxml markdownify playwright"
+        echo "        python -m playwright install chromium"
+        echo "      for YouTube transcripts (optional):"
+        echo "        brew install yt-dlp    # macOS"
     else
-        ok "all Python dependencies installed"
+        ok "core Python dependencies installed"
+        if ! command -v yt-dlp >/dev/null 2>&1; then
+            warn "yt-dlp not found — YouTube transcript fetching will be skipped"
+            echo "      install with: brew install yt-dlp"
+        fi
+        if ! python3 -c "from playwright.sync_api import sync_playwright" 2>/dev/null; then
+            warn "Playwright browsers not installed — run: python -m playwright install chromium"
+        fi
     fi
 else
     warn "python3 not found — inbox-fetcher and linter won't work"
