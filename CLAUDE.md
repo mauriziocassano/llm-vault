@@ -176,8 +176,21 @@ relevant wiki page if one exists.
 ```
 
 Don't add — replace. Carry forward any open threads from the previous
-`hot.md` that are still unresolved. At session start, read `wiki/hot.md`
-first.
+`hot.md` that are still unresolved.
+
+---
+
+## Session start
+
+At the beginning of every session, read in this order:
+
+1. `memory/MEMORY.md` — index of project memory; follow links to any
+   files relevant to the current request (user profile, naming conventions,
+   feedback, commit order, open project threads)
+2. `wiki/hot.md` — recent query answers and open threads from last session
+
+Do not skip step 1. The memory folder is the primary source of user context
+and working preferences that are not derivable from the vault content itself.
 
 ---
 
