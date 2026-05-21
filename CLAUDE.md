@@ -158,9 +158,26 @@ frontmatter, naming consistency, view staleness). Output to
 
 ## Hot cache
 
-At session end, if we touched meaningful content, update `wiki/hot.md`
-with 5-10 lines on what we covered, what's open, what to pick up next.
-Don't add — replace. At session start, read `wiki/hot.md` first.
+At session end, if we touched meaningful content, replace `wiki/hot.md`
+with exactly three sections:
+
+```
+## Last session (YYYY-MM-DD — session N)
+
+## Recent queries
+Bullet per query answered this session: the finding + the source that
+supported it. Only queries with a specific traceable answer. Omit
+exploratory or structural work.
+
+## Open threads
+Bullet per unresolved item: a decision pending, a piece of analysis not
+yet written, an external input we're waiting for. Each bullet names the
+relevant wiki page if one exists.
+```
+
+Don't add — replace. Carry forward any open threads from the previous
+`hot.md` that are still unresolved. At session start, read `wiki/hot.md`
+first.
 
 ---
 

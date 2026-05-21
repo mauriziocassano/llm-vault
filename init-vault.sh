@@ -194,16 +194,16 @@ tags: [hot-cache]
 
 # Hot Cache
 
-Short rolling memory of recent sessions. Rewritten at session end.
-Read by the agent at session start.
+## Last session (YYYY-MM-DD — session N)
 
-## Recent sessions
+## Recent queries
 
-<!-- Populated by /save and at session end. -->
+<!-- Bullet per query answered: the finding + the source that supported it. -->
 
 ## Open threads
 
-<!-- Things left hanging. -->
+<!-- Bullet per unresolved item: a decision pending, analysis not yet written,
+     an external input we're waiting for. Link to the relevant wiki page if one exists. -->
 EOF
     ok "wiki/hot.md"
 else
