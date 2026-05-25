@@ -23,7 +23,7 @@ wiki/                 Your domain
   sources/            One file per source in raw/, with summary
   views/              Alternative representations: timelines, comparisons, charts, slides, posts
   compass.md          Output of /reflect, rewritten each time
-  hot.md              Where we left off, ~5-10 lines
+  threads.md          Persistent open-threads tracker
   index.md            Catalog of the whole wiki
   log.md              Append-only log of operations
 conversations/        Transcripts saved with /save
@@ -32,7 +32,7 @@ conversations/        Transcripts saved with /save
 ```
 
 Three directories under `wiki/`. Everything you write goes to one of
-them, plus `compass.md`, `hot.md`, `index.md`, `log.md`.
+them, plus `compass.md`, `threads.md`, `index.md`, `log.md`.
 
 ---
 
@@ -56,12 +56,15 @@ Every file in `wiki/` has YAML frontmatter:
 
 ```yaml
 ---
-type: source | page | view
+type: source | page | view | tracker
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 tags: [...]
 ---
 ```
+
+`tracker` is for standalone catalog files at the `wiki/` root (`threads.md` today).
+It requires only `type`, `created`, `updated` — no additional fields.
 
 For `wiki/sources/`:
 ```yaml
@@ -122,7 +125,7 @@ multiple passes, or leave citations dangling for the linter).
 
 ### QUERY
 User asks a question.
-1. Read `wiki/hot.md` first — cheap context of where we were.
+1. Read `wiki/compass.md` — vault direction and current blind spots.
 2. Check `index.md` for relevant pages.
 3. **If a relevant view exists in `wiki/views/`, read it** — it's a
    pre-compiled structured view, often faster than re-reading pages.
@@ -156,27 +159,34 @@ frontmatter, naming consistency, view staleness). Output to
 
 ---
 
-## Hot cache
+## Threads
 
-At session end, if we touched meaningful content, replace `wiki/hot.md`
-with exactly three sections:
+`wiki/threads.md` is the persistent tracker for open questions, pending decisions,
+and unresolved work. It survives session boundaries — nothing in it is ever
+silently replaced.
 
-```
-## Last session (YYYY-MM-DD — session N)
+### Adding a thread
 
-## Recent queries
-Bullet per query answered this session: the finding + the source that
-supported it. Only queries with a specific traceable answer. Omit
-exploratory or structural work.
+When a question or decision surfaces during a session that cannot be resolved
+from the vault, propose adding it to `threads.md`. Do not add silently — surface
+the proposal and wait for user confirmation.
 
-## Open threads
-Bullet per unresolved item: a decision pending, a piece of analysis not
-yet written, an external input we're waiting for. Each bullet names the
-relevant wiki page if one exists.
-```
+### Resolving a thread
 
-Don't add — replace. Carry forward any open threads from the previous
-`hot.md` that are still unresolved.
+A thread can be closed in two ways:
+1. **Agent-detected:** the agent notices during a session that a thread has been
+   resolved and surfaces the proposal inline.
+2. **User-stated:** the user explicitly says "thread X is resolved" or equivalent.
+
+In both cases, on user confirmation, run the three-step close:
+
+1. `/save` the current conversation → `conversations/YYYY-MM-DD-<slug>.md`
+2. Append to `wiki/log.md`: `## [YYYY-MM-DD] thread-close | <thread-title>` with
+   a one-line summary and a link to the saved conversation file.
+3. Remove the thread from `wiki/threads.md`.
+
+If the resolution produced substantive content, also update the relevant wiki page
+before closing.
 
 ---
 
@@ -187,7 +197,8 @@ At the beginning of every session, read in this order:
 1. `memory/MEMORY.md` — index of project memory; follow links to any
    files relevant to the current request (user profile, naming conventions,
    feedback, commit order, open project threads)
-2. `wiki/hot.md` — recent query answers and open threads from last session
+2. `wiki/threads.md` — persistent open threads: pending decisions, unresolved
+   questions, ongoing work
 
 Do not skip step 1. The memory folder is the primary source of user context
 and working preferences that are not derivable from the vault content itself.
@@ -200,12 +211,13 @@ When invoked with `--unattended`, `VAULT_UNATTENDED=1`, or the word
 "unattended" in the prompt:
 
 You CAN: read anything, run LINT, run REFLECT, update
-`wiki/compass.md`, `hot.md`, `log.md`, `.lint/report.md`.
+`wiki/compass.md`, `wiki/log.md`, `.lint/report.md`.
 
 You CANNOT: ingest, forget, create views, modify `wiki/pages/`,
-delete anything from `raw/` or `wiki/sources/`, apply any structural
-change. Proposals stay as proposals until the user confirms
-interactively.
+delete anything from `raw/` or `wiki/sources/`, modify `wiki/threads.md`
+(threads represent user intent — adding/closing requires an interactive
+session), apply any structural change. Proposals stay as proposals until
+the user confirms interactively.
 
 ---
 

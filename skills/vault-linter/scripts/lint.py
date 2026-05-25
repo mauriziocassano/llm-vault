@@ -42,7 +42,7 @@ DUPLICATE_SIMILARITY_THRESHOLD = 0.75
 
 # Files allowed to be "orphan" (no incoming wiki links)
 ORPHAN_EXCEPTIONS = {
-    "wiki/hot.md",
+    "wiki/threads.md",
     "wiki/compass.md",
     "wiki/index.md",
     "wiki/log.md",
@@ -55,6 +55,7 @@ REQUIRED_FRONTMATTER = {
     "source": {"type", "source_path", "created", "updated"},
     "page": {"type", "created", "updated"},
     "view": {"type", "kind", "created", "updated", "based_on"},
+    "tracker": {"type", "created", "updated"},
 }
 
 # Patterns
@@ -368,7 +369,7 @@ def check_duplicates(pages: dict[str, WikiPage]) -> list[Finding]:
 def check_missing_metadata(pages: dict[str, WikiPage]) -> list[Finding]:
     findings = []
     for page in pages.values():
-        # Catalog files (index.md, log.md, hot.md, compass.md) are
+        # Catalog files (index.md, log.md, threads.md, compass.md) are
         # exempt — they're not typed content, they're bookkeeping.
         if page.rel in ORPHAN_EXCEPTIONS:
             continue

@@ -22,8 +22,11 @@ Don't save boilerplate exchanges.
 3. If `/save <n>` was used, use that as slug.
 4. Write to `conversations/<slug>.md`.
 5. Append `## [YYYY-MM-DD] save | <slug>` to `wiki/log.md`.
-6. Update `wiki/hot.md` with where we ended.
-7. Confirm: "Saved to conversations/<slug>.md".
+6. Confirm: "Saved to conversations/<slug>.md".
+
+When `/save` is invoked as part of closing a thread, the caller (the thread-close
+protocol in CLAUDE.md) also appends a `thread-close` entry to `log.md` and removes
+the thread from `wiki/threads.md`. Do not touch `wiki/threads.md` from inside `/save`.
 
 ## Template
 
@@ -54,4 +57,4 @@ Threads left hanging, TODOs.
 - Distill. Don't dump the whole transcript.
 - Don't invent links the session didn't use.
 - Don't modify `wiki/pages/` as part of `/save` — that's a separate act.
-- Do update `wiki/hot.md`.
+- Do not modify `wiki/threads.md` — thread lifecycle is managed by the thread-close protocol, not by `/save`.
