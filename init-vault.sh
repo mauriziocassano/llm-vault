@@ -183,31 +183,31 @@ else
     skip "wiki/log.md (exists)"
 fi
 
-if [ ! -f "$VAULT_DIR/wiki/hot.md" ]; then
-    cat > "$VAULT_DIR/wiki/hot.md" <<'EOF'
+if [ ! -f "$VAULT_DIR/wiki/threads.md" ]; then
+    cat > "$VAULT_DIR/wiki/threads.md" <<'EOF'
 ---
-type: page
+type: tracker
 created: INIT
 updated: INIT
-tags: [hot-cache]
+tags: [threads]
 ---
 
-# Hot Cache
+# Open Threads
 
-## Last session (YYYY-MM-DD — session N)
+Persistent tracker for unresolved questions, pending decisions, and ongoing work.
+Threads survive session boundaries. When a thread resolves, the agent saves the
+conversation to `conversations/`, appends a one-line entry to `log.md` linking
+to it, then removes the thread here.
 
-## Recent queries
+<!-- Add open threads as bullets. Link to relevant wiki pages when applicable.
 
-<!-- Bullet per query answered: the finding + the source that supported it. -->
+- **Thread title** — context and what needs to happen. → wiki/pages/related-page.md
 
-## Open threads
-
-<!-- Bullet per unresolved item: a decision pending, analysis not yet written,
-     an external input we're waiting for. Link to the relevant wiki page if one exists. -->
+-->
 EOF
-    ok "wiki/hot.md"
+    ok "wiki/threads.md"
 else
-    skip "wiki/hot.md (exists)"
+    skip "wiki/threads.md (exists)"
 fi
 
 # .lint state

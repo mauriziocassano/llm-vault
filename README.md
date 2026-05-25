@@ -84,7 +84,7 @@ What happens on re-run:
   overwrite with the latest template). Say yes unless you've
   customized the contract locally.
 - **Created only if missing** — `inbox.md`, `wiki/index.md`,
-  `wiki/log.md`, `wiki/hot.md`, `.lint/state.yaml`, `.gitignore`.
+  `wiki/log.md`, `wiki/threads.md`, `.lint/state.yaml`, `.gitignore`.
 - **Never touched** — `raw/`, `wiki/pages/`, `wiki/sources/`,
   `wiki/views/`, `conversations/`, `wiki/compass.md`. Your
   knowledge and ongoing work are safe.
@@ -192,11 +192,12 @@ Key additions and changes made in this fork relative to [maeste/my-2nd-brain](ht
 - **Local file ingestion via `.tmp/`** — drop `.md` or `.pdf` files into `.tmp/`,
   say "process the inbox". Files land in `raw/docs/` or `raw/papers/` with vault-standard
   frontmatter. Originals deleted from `.tmp/` after processing.
-- **hot.md restructured** — three exact sections mandated: `Last session` (datestamp only),
-  `Recent queries` (findings + source traces), `Open threads` (pending decisions with page
-  links). Replaces the original vague "5-10 lines on what we covered".
-- **Session-start protocol** — CLAUDE.md now explicitly mandates reading `memory/MEMORY.md`
-  then `wiki/hot.md` at every session start, in that order.
+- **Replaced `hot.md` with `threads.md`** — persistent open-thread tracker that survives
+  session boundaries. Threads close via a three-step protocol (save conversation →
+  append to log.md → remove thread) leaving a full audit trail. `compass.md` is now
+  read at every QUERY for vault-direction context.
+- **Session-start protocol** — CLAUDE.md explicitly mandates reading `memory/MEMORY.md`
+  then `wiki/threads.md` at every session start, in that order.
 - **Memory folder in vault** — project-specific memory (user profile, naming conventions,
   feedback, commit workflow) lives in `memory/` inside the vault, gitignored and
   local to the user.

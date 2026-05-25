@@ -23,7 +23,7 @@ Nine deterministic checks. Each produces findings with concrete paths.
 | # | Check | What it catches |
 |---|---|---|
 | 1 | **Dead links** | `[[path]]` pointing to non-existent files |
-| 2 | **Orphan pages** | Pages with zero incoming links (excluding hot.md, compass.md, index.md, views) |
+| 2 | **Orphan pages** | Pages with zero incoming links (excluding threads.md, compass.md, index.md, views) |
 | 3 | **Duplicate concepts** | Pages with similar titles within the same subdir |
 | 4 | **Missing metadata** | Frontmatter missing required fields for the type |
 | 5 | **Inconsistent naming** | Same concept referenced by different names |

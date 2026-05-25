@@ -43,7 +43,7 @@ The agent does the bookkeeping. You do the thinking.
 │    views/     ← timelines, slides,   │
 │                 charts, reports      │
 │    compass.md ← written by /reflect  │
-│    hot.md     ← where we left off    │
+│    threads.md ← open threads tracker  │
 └───────┬──────────────────────────────┘
         │ QUERY (agent reads wiki to answer)
         │ VIEW  (agent builds alternative representations)
