@@ -1,6 +1,6 @@
-# Second Brain Vault 
+# Second Brain Vault
 
-A self-maintaining personal knowledge vault pattern, based on
+A self-maintaining personal knowledge vault pattern, inspired by
 [Andrej Karpathy's LLM Wiki idea](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
 
 You curate sources. The agent compiles a wiki, answers your
@@ -12,12 +12,21 @@ agent that reads `CLAUDE.md` or `AGENTS.md`.
 
 ---
 
+## Origin and attribution
+
+This project is a fork of [maeste/my-2nd-brain](https://github.com/maeste/my-2nd-brain),
+itself inspired by [Andrej Karpathy's LLM Wiki idea](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+
+See [What's changed from the original](#whats-changed-from-the-original) for a summary
+of modifications made in this fork.
+
+---
+
 ## What's in this project
 
 ```
-vault-bundle/
 ├── init-vault.sh         bootstrap script (run first)
-├── CLAUDE.md             the contract between you and the agent (~175 lines)
+├── CLAUDE.md             the contract between you and the agent (~230 lines)
 ├── AGENTS.md             symlink to CLAUDE.md for Codex / OpenAI agents
 ├── GETTING-STARTED.md    10-minute walkthrough for newcomers
 ├── README.md             this file
@@ -100,7 +109,7 @@ question can draw on.
 
 ## Design principles
 
-Five invariants:
+Six invariants:
 
 1. **Raw is immutable.** If the wiki is corrupted, it's recompilable
    from `raw/` alone.
@@ -173,6 +182,29 @@ before the signals land.
 
 ---
 
+## What's changed from the original
+
+Key additions and changes made in this fork relative to [maeste/my-2nd-brain](https://github.com/maeste/my-2nd-brain):
+
+- **Two-phase inbox fetcher** — replaced the original trafilatura-only fetcher with a
+  two-phase architecture: Python script (Playwright + trafilatura, image triage, chart
+  extraction) followed by an agent vision pass. Original preserved as `inbox-fetcher-legacy/`.
+- **Local file ingestion via `.tmp/`** — drop `.md` or `.pdf` files into `.tmp/`,
+  say "process the inbox". Files land in `raw/docs/` or `raw/papers/` with vault-standard
+  frontmatter. Originals deleted from `.tmp/` after processing.
+- **hot.md restructured** — three exact sections mandated: `Last session` (datestamp only),
+  `Recent queries` (findings + source traces), `Open threads` (pending decisions with page
+  links). Replaces the original vague "5-10 lines on what we covered".
+- **Session-start protocol** — CLAUDE.md now explicitly mandates reading `memory/MEMORY.md`
+  then `wiki/hot.md` at every session start, in that order.
+- **Memory folder in vault** — project-specific memory (user profile, naming conventions,
+  feedback, commit workflow) lives in `memory/` inside the vault, gitignored and
+  local to the user.
+- **Vault content gitignored** — `raw/`, `wiki/`, `conversations/`, `memory/`, `inbox.md`
+  excluded from git so only the system source code (skills, commands, CLAUDE.md) is pushed.
+
+---
+
 ## Evolving the contract
 
 `CLAUDE.md` is designed to co-evolve. When you hit friction, ask the
@@ -183,5 +215,7 @@ reverted. Your vault, your rules.
 
 ## License and attribution
 
-MIT. Built on the pattern described by
-[Andrej Karpathy](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+MIT — see [LICENSE](LICENSE).
+
+Built on the pattern described by [Andrej Karpathy](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+Forked from [maeste/my-2nd-brain](https://github.com/maeste/my-2nd-brain).
