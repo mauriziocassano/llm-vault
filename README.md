@@ -51,8 +51,8 @@ of modifications made in this fork.
 ## Quick start
 
 ```bash
-git clone https://github.com/mauriziocassano/maeste-2nd-brain.git
-cd my-2nd-brain
+git clone https://github.com/mauriziocassano/llm-vault.git
+cd llm-vault
 ./init-vault.sh                    # → ./second-brain-vault
 # or
 ./init-vault.sh ~/knowledge/X      # explicit path
