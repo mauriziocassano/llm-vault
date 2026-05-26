@@ -567,6 +567,70 @@ def check_missing_cross_references(pages: dict[str, WikiPage]) -> list[Finding]:
     return findings
 
 
+# --- Backlink helpers -------------------------------------------------------
+
+def compute_backlink_counts(pages: dict[str, WikiPage]) -> dict[str, int]:
+    """Count [[wiki/pages/<slug>]] references across all wiki/ files per page."""
+    counts: dict[str, int] = defaultdict(int)
+    for page in pages.values():
+        for target, _ in page.outgoing_links:
+            t = target.strip()
+            if not t.startswith("wiki/pages/"):
+                continue
+            if not t.endswith(".md"):
+                t = t + ".md"
+            if t in pages:
+                counts[t] += 1
+    return counts
+
+
+def update_index_backlinks(vault: Path, counts: dict[str, int]) -> None:
+    """Update ← N backlink counts in wiki/index.md page entries in place."""
+    index_path = vault / "wiki" / "index.md"
+    if not index_path.exists():
+        return
+
+    text = index_path.read_text(encoding="utf-8")
+    new_lines = []
+    for line in text.splitlines(keepends=True):
+        m = re.match(r"^- \[\[wiki/pages/([^\]]+)\]\]", line)
+        if m and "← " in line:
+            slug = m.group(1)
+            rel = f"wiki/pages/{slug}.md"
+            count = counts.get(rel, 0)
+            line = re.sub(r"←\s*\d+", f"← {count}", line)
+        new_lines.append(line)
+
+    updated = "".join(new_lines)
+    if updated != text:
+        index_path.write_text(updated, encoding="utf-8")
+
+
+def check_thin_index_summaries(pages: dict[str, WikiPage], vault: Path) -> list[Finding]:
+    """Advisory: wiki/pages entries in index.md missing the new three-signal format."""
+    findings = []
+    index_path = vault / "wiki" / "index.md"
+    if not index_path.exists():
+        return findings
+
+    text = index_path.read_text(encoding="utf-8")
+    for line_no, line in enumerate(text.splitlines(), start=1):
+        m = re.match(r"^- \[\[wiki/pages/([^\]]+)\]\]", line)
+        if not m:
+            continue
+        slug = m.group(1)
+        rel = f"wiki/pages/{slug}.md"
+        if "← " not in line:
+            findings.append(Finding(
+                severity="advisory",
+                check="thin_index_summaries",
+                file=rel,
+                line=line_no,
+                detail="index entry missing backlink count (← N) — old one-liner format; update to three-signal format",
+            ))
+    return findings
+
+
 # --- Report -----------------------------------------------------------------
 
 def severity_rank(s: str) -> int:
@@ -665,13 +729,16 @@ def run_lint(vault: Path, quiet: bool = False) -> int:
         ("gaps", check_gaps),
         ("view_staleness", check_view_staleness),
         ("missing_cross_references", check_missing_cross_references),
+        ("thin_index_summaries", check_thin_index_summaries),
     ]
+
+    # Checks that require the vault path as a second argument
+    vault_checks = {"dead_links", "orphans", "thin_index_summaries"}
 
     findings: list[Finding] = []
     for name, fn in all_checks:
         try:
-            # Not all checks accept vault; use signature-based dispatch
-            if name in ("dead_links", "orphans"):
+            if name in vault_checks:
                 out = fn(pages, vault)
             else:
                 out = fn(pages)
@@ -681,6 +748,10 @@ def run_lint(vault: Path, quiet: bool = False) -> int:
         findings.extend(out)
         if not quiet:
             print(f"  {name}: {len(out)} finding(s)")
+
+    # Update backlink counts in wiki/index.md
+    counts = compute_backlink_counts(pages)
+    update_index_backlinks(vault, counts)
 
     # Sort: blocking first, then important, then advisory; within, by file
     findings.sort(key=lambda f: (severity_rank(f.severity), f.file, f.line or 0))

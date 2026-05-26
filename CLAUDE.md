@@ -48,6 +48,28 @@ them, plus `compass.md`, `threads.md`, `index.md`, `log.md`.
    and let them choose what matters.
 6. **Update `index.md` and `log.md`** after any writing operation.
 
+### Index entry format
+
+Every `wiki/pages/` entry in `wiki/index.md` uses this three-signal format:
+
+```
+- [[wiki/pages/slug]] · `tag1` `tag2` `tag3` · ← N
+  Sentence one: specific claim, data point, or framework.
+  Sentence two (optional): second specific claim. Three sentences max.
+```
+
+**Three signals:**
+- **Tags** — backtick-wrapped, space-separated; sourced from page frontmatter.
+- **Backlink count** (`← N`) — counts `[[wiki/pages/<slug>]]` references across all
+  `wiki/` files; **maintained by the linter, not the agent**. Write `← 0` when
+  creating a new entry; the linter updates it on the next run.
+- **Summary** — 2-3 sentences. Mention specific claims, data points, or frameworks
+  (e.g. "Whatnot frequency multiplier 100–250×"), not vague topic labels. Test: a
+  reader should decide *should I open this page?* without opening it.
+
+Sources and views keep one-liner entries — sources are secondary to compiled pages;
+views are pre-compiled summaries by design.
+
 ---
 
 ## Frontmatter
