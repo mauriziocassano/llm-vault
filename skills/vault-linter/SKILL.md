@@ -31,8 +31,9 @@ Nine deterministic checks. Each produces findings with concrete paths.
 | 7 | **Gaps** | Concept names in prose without a corresponding page |
 | 8 | **View staleness** | Evolving views (`shareable: false`) whose `based_on` pages changed more than 30 days after |
 | 9 | **Missing cross-references** | Source pages citing a page in prose without a link |
+| 10 | **Thin index summaries** | `wiki/pages/` entries in `wiki/index.md` missing the three-signal format (`← N` backlink count) |
 
-Checks 3, 5, 7, 9 are heuristic — they can produce false positives and
+Checks 3, 5, 7, 9, 10 are heuristic — they can produce false positives and
 are marked as advisory.
 
 ## How to run
@@ -76,6 +77,15 @@ last_findings_count: 12
 ## Dependencies
 
 Python standard library only. No pip install needed.
+
+## Backlink auto-update
+
+After every run, the linter counts `[[wiki/pages/<slug>]]` references across
+all `wiki/` files and rewrites the `← N` values in `wiki/index.md` page entries
+in place. This is automatic and silent — no finding is emitted. The agent owns
+the summary text and tags; the linter owns the backlink count.
+
+New index entries should be written with `← 0`; the linter will correct them.
 
 ## What the linter does NOT do
 
