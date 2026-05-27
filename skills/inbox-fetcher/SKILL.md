@@ -1,5 +1,5 @@
 ---
-name: inbox-fetcher-vision
+name: inbox-fetcher
 description: Two-phase vision-enhanced inbox fetcher for a second brain vault. Phase 1 (Python script): HTML + PDF + YouTube + walled-domain fetching with conditional headless Playwright for JS pages, image triage by rendered bounding box (sorted by area, capped at 15), chart extraction (inline JS config + canvas screenshot), and figure screenshots to assets/__pending/. Phase 2 (agent): vision-transcribes each figure into > [DIAGRAM:] / > [CHART:] blocks and runs an interactive Chrome DevTools MCP pass for login-walled URLs. Use this skill when the user mentions "inbox", "fetch", "process links", "scrape URLs", or "download articles" — prefer over inbox-fetcher when images, diagrams, or charts in the source content matter. Handles local .md files from .tmp/ and URLs from inbox.md. Supports PDF, YouTube transcripts (yt-dlp), and arxiv rewrites.
 ---
 
@@ -67,7 +67,7 @@ The script **never** calls vision or MCP tools. The agent **never** re-fetches H
 │   ├── papers/           direct PDF downloads
 │   └── docs/             local .md file output
 └── skills/
-    └── inbox-fetcher-vision/
+    └── inbox-fetcher/
         ├── SKILL.md
         └── scripts/
             ├── fetch_inbox.py       Phase 1 script
@@ -111,13 +111,13 @@ Rules:
 From the vault root:
 
 ```bash
-python skills/inbox-fetcher-vision/scripts/fetch_inbox.py
+python3 skills/inbox-fetcher/scripts/fetch_inbox.py
 ```
 
 Or from anywhere:
 
 ```bash
-python skills/inbox-fetcher-vision/scripts/fetch_inbox.py --vault /path/to/vault
+python3 skills/inbox-fetcher/scripts/fetch_inbox.py --vault /path/to/vault
 ```
 
 Use `--dry-run` to see what would be processed without fetching.

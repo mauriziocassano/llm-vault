@@ -150,7 +150,7 @@ see it.
 
 ---
 
-## Five rules the agent follows
+## Six rules the agent follows
 
 These are invariants. The agent won't break them. Good to know they
 exist:
@@ -160,8 +160,9 @@ exist:
 3. **Paraphrase, don't copy.** Summaries are in the agent's words.
 4. **You curate, it maintains.** No auto-fetching, no silent
    structural changes, no views without your request.
-5. **`shareable: true` views are frozen.** New version = new dated
-   file. Everything else can evolve in place.
+5. **Touch ≤15 files per operation.** Larger changes are split and
+   surfaced for your approval.
+6. **Update `index.md` and `log.md`** after any writing operation.
 
 ---
 
