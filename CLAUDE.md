@@ -118,6 +118,8 @@ User says "ingest X" → read the new `raw/` content, write or update:
 - any `wiki/pages/...` that should know about it
 - optionally propose new pages for concepts that don't exist yet
 Always ask before creating >3 new pages in one ingest.
+After all writes complete, run `python3 .claude/skills/vault-linter/scripts/record_ingest.py`
+to bump the ingest counter for the auto-lint trigger.
 
 ### FORGET
 User says "forget X", "remove source X", or runs `/forget <source>` →
@@ -223,6 +225,9 @@ At the beginning of every session, read in this order:
    feedback, commit order, open project threads)
 2. `wiki/threads.md` — persistent open threads: pending decisions, unresolved
    questions, ongoing work
+3. `.lint/state.yaml` — if `ingests_since_last_lint >= 5` or `last_lint` is
+   more than 7 days ago, surface a one-line proposal to run `vault-linter`
+   before proceeding. Do not run it without confirmation.
 
 Do not skip step 1. The memory folder is the primary source of user context
 and working preferences that are not derivable from the vault content itself.
