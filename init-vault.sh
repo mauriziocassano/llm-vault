@@ -282,6 +282,9 @@ if [ -d "$SCRIPT_DIR/skills/vault-linter" ]; then
     cp "$SCRIPT_DIR/skills/vault-linter/scripts/lint.py" \
        "$VAULT_DIR/.claude/skills/vault-linter/scripts/lint.py"
     chmod +x "$VAULT_DIR/.claude/skills/vault-linter/scripts/lint.py"
+    cp "$SCRIPT_DIR/skills/vault-linter/scripts/record_ingest.py" \
+       "$VAULT_DIR/.claude/skills/vault-linter/scripts/record_ingest.py"
+    chmod +x "$VAULT_DIR/.claude/skills/vault-linter/scripts/record_ingest.py"
     ok "skill: vault-linter"
 else
     warn "vault-linter skill not found in bundle"

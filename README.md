@@ -111,13 +111,14 @@ question can draw on.
 
 Six invariants:
 
-1. **Raw is immutable.** If the wiki is corrupted, it's recompilable
-   from `raw/` alone.
+1. **Never write to `raw/`.** Only the fetcher skill adds files there.
 2. **Every claim cites a source.** No orphan claims in the wiki.
 3. **Paraphrase, don't copy.** Summaries are in the agent's words.
 4. **You curate, the agent maintains.** No auto-fetching, no
    auto-structural changes, no views without your request.
-5. **`shareable: true` views are frozen.** Anything else evolves.
+5. **Touch ≤15 files per operation.** Larger changes are split and
+   surfaced for user approval.
+6. **Update `index.md` and `log.md`** after any writing operation.
 
 ---
 
