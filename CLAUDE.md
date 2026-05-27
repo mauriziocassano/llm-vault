@@ -200,12 +200,14 @@ A thread can be closed in two ways:
    resolved and surfaces the proposal inline.
 2. **User-stated:** the user explicitly says "thread X is resolved" or equivalent.
 
-In both cases, on user confirmation, run the three-step close:
+In both cases, on user confirmation, run the four-step close:
 
 1. `/save` the current conversation → `conversations/YYYY-MM-DD-<slug>.md`
 2. Append to `wiki/log.md`: `## [YYYY-MM-DD] thread-close | <thread-title>` with
    a one-line summary and a link to the saved conversation file.
 3. Remove the thread from `wiki/threads.md`.
+4. If a memory file in `memory/` tracks this thread: delete that file and remove
+   its entry from `memory/MEMORY.md`.
 
 If the resolution produced substantive content, also update the relevant wiki page
 before closing.
