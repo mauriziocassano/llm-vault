@@ -28,13 +28,18 @@ Nine deterministic checks. Each produces findings with concrete paths.
 | 4 | **Missing metadata** | Frontmatter missing required fields for the type |
 | 5 | **Inconsistent naming** | Same concept referenced by different names |
 | 6 | **Stale sources** | `wiki/sources/` pages not updated in >180 days |
-| 7 | **Gaps** | Concept names in prose without a corresponding page |
+| 7 | **Gaps** | Multi-word Title-Case concept names in page/source prose (excludes logs, index, fences, and citation lines) without a corresponding page |
 | 8 | **View staleness** | Evolving views (`shareable: false`) whose `based_on` pages changed more than 30 days after |
 | 9 | **Missing cross-references** | Source pages citing a page in prose without a link |
 | 10 | **Thin index summaries** | `wiki/pages/` entries in `wiki/index.md` missing the three-signal format (`← N` backlink count) |
 
 Checks 3, 5, 7, 9, 10 are heuristic — they can produce false positives and
 are marked as advisory.
+
+The **Gaps** check (7) is intentionally narrow: it only matches capitalized
+multi-word phrases, so it cannot tell a real concept from an incidental
+place/person/product name, and it will not catch single-word or lowercase
+concepts. Treat its output as a prompt to look, not a definitive gap list.
 
 ## How to run
 

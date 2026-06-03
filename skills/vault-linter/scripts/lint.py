@@ -39,6 +39,15 @@ WIKI_SUBDIRS = ("pages", "sources", "views")
 STALE_SOURCE_DAYS = 180
 VIEW_STALE_DAYS = 30
 DUPLICATE_SIMILARITY_THRESHOLD = 0.75
+# Bodies must also overlap before two same-titled files count as duplicates —
+# guards against shared publisher title patterns (distinct articles, similar names).
+DUPLICATE_BODY_THRESHOLD = 0.50
+DUPLICATE_SHINGLE_SIZE = 3  # word-shingle length for body similarity
+
+# --- Vault-specific tuning (edit these; promote to config.yaml if they grow) ---
+OWNER_NAME = "Maurizio Cassano"        # never flag the vault owner as a content gap
+GAP_IGNORE_TERMS: set[str] = set()     # add known proper nouns to silence here
+GAP_MIN_COUNT = 3                      # min prose mentions before a gap is reported
 
 # Files allowed to be "orphan" (no incoming wiki links)
 ORPHAN_EXCEPTIONS = {
@@ -63,6 +72,19 @@ WIKILINK_RE = re.compile(r"\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]")
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---", re.DOTALL)
 # Heuristic: capitalized multi-word phrases in prose (very rough proper-noun detector)
 PROPER_NOUN_RE = re.compile(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b")
+# Section headings (## .. ####); group 1 is the heading text, leading enumeration
+# like "4. " stripped separately.
+HEADING_RE = re.compile(r"^#{2,4}\s+(.+?)\s*$")
+HEADING_ENUM_RE = re.compile(r"^\d+[.)]\s+")  # "4. " or "4) " prefix in a heading
+
+# --- Gaps-extraction filters (each removes one class of false positive) -----
+# Only scan real content; bookkeeping files (log/index/compass/threads) are noise.
+GAP_SCAN_PREFIXES = ("wiki/pages/", "wiki/sources/")
+# Bibliographic lines name authors/firms/sources — citations, not concepts.
+BIBLIO_LINE_RE = re.compile(
+    r"^\s*\*\*(Source|Authors?|Speakers?|URL|Published|Date|Publisher)\b", re.I)
+CODE_FENCE_RE = re.compile(r"^\s*```")          # ``` opening/closing a fenced block
+LEADING_ARTICLE_RE = re.compile(r"^(?:The|A|An)\s+")  # drop leading article from a phrase
 
 
 # --- Data types -------------------------------------------------------------
@@ -236,6 +258,23 @@ def title_similarity(a: str, b: str) -> float:
     return j
 
 
+def body_similarity(a: str, b: str, k: int = DUPLICATE_SHINGLE_SIZE) -> float:
+    """Jaccard over k-word shingles of two bodies. Shingles capture phrasing,
+    not just shared vocabulary, so two articles in the same domain (lots of
+    common words) but with different content score low. Frontmatter is already
+    excluded from body_text, so no stripping needed here."""
+    def shingles(text: str) -> set[tuple[str, ...]]:
+        words = re.findall(r"[a-z0-9]+", text.lower())
+        if len(words) < k:
+            return {tuple(words)} if words else set()
+        return {tuple(words[i:i + k]) for i in range(len(words) - k + 1)}
+
+    sa, sb = shingles(a), shingles(b)
+    if not sa or not sb:
+        return 0.0
+    return len(sa & sb) / len(sa | sb)
+
+
 def parse_date(s: str) -> date | None:
     for fmt in ("%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"):
         try:
@@ -351,18 +390,24 @@ def check_duplicates(pages: dict[str, WikiPage]) -> list[Finding]:
             for p2 in group[i + 1:]:
                 t1 = p1.title or p1.path.stem
                 t2 = p2.title or p2.path.stem
-                sim = title_similarity(t1, t2)
-                if sim >= DUPLICATE_SIMILARITY_THRESHOLD:
-                    pair = tuple(sorted([p1.rel, p2.rel]))
-                    if pair in seen_pairs:
-                        continue
-                    seen_pairs.add(pair)
-                    findings.append(Finding(
-                        severity="advisory",
-                        check="duplicates",
-                        file=p1.rel,
-                        detail=f"similar to {p2.rel} (jaccard={sim:.2f})",
-                    ))
+                tsim = title_similarity(t1, t2)
+                if tsim < DUPLICATE_SIMILARITY_THRESHOLD:
+                    continue
+                # Similar titles alone aren't enough — distinct articles can
+                # share a publisher's title pattern. Require body overlap too.
+                bsim = body_similarity(p1.body_text, p2.body_text)
+                if bsim < DUPLICATE_BODY_THRESHOLD:
+                    continue
+                pair = tuple(sorted([p1.rel, p2.rel]))
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                findings.append(Finding(
+                    severity="advisory",
+                    check="duplicates",
+                    file=p1.rel,
+                    detail=f"similar to {p2.rel} (title={tsim:.2f} body={bsim:.2f})",
+                ))
     return findings
 
 
@@ -439,32 +484,92 @@ def check_stale_sources(pages: dict[str, WikiPage]) -> list[Finding]:
     return findings
 
 
-def check_gaps(pages: dict[str, WikiPage]) -> list[Finding]:
-    """Heuristic: proper-noun-like phrases in prose that don't correspond to
-    a wiki page. Very noisy; marked advisory."""
-    findings = []
+def build_coverage_terms(pages: dict[str, WikiPage]) -> set[str]:
+    """Every term the vault already 'covers', lowercased. A concept is covered
+    when it matches a page title/slug/filename (canonical pages), OR a section
+    heading inside any page (a concept can live as a ## section, not only a
+    standalone page), OR a frontmatter tag/alias. Stored as both the raw
+    lowercase form and its slug so callers can match either."""
+    terms: set[str] = set()
 
-    # Build a set of known page titles (lowercase) for quick lookup
-    known: set[str] = set()
+    def add(value: str) -> None:
+        value = value.strip()
+        if not value:
+            return
+        terms.add(value.lower())
+        terms.add(slugify(value))
+
     for page in pages.values():
         if page.title:
-            known.add(page.title.lower())
-            known.add(slugify(page.title))
-        known.add(page.path.stem.lower())
+            add(page.title)
+        terms.add(page.path.stem.lower())
+
+        # Section headings — strip leading enumeration like "4. " first.
+        for line in page.body_text.splitlines():
+            m = HEADING_RE.match(line.strip())
+            if m:
+                add(HEADING_ENUM_RE.sub("", m.group(1).strip()))
+
+        # Frontmatter tags and aliases (parser returns these as lists).
+        for key in ("tags", "aliases"):
+            val = page.frontmatter.get(key)
+            if isinstance(val, list):
+                for item in val:
+                    add(str(item))
+            elif isinstance(val, str):
+                add(val)
+
+    return terms
+
+
+def check_gaps(pages: dict[str, WikiPage]) -> list[Finding]:
+    """Heuristic: multi-word Title-Case phrases that recur in real content prose
+    but aren't covered by any page title, section heading, or frontmatter tag.
+
+    Deliberately narrow to stay trustworthy. It scans ONLY wiki/pages/ and
+    wiki/sources/ prose, skipping code/diagram fences, heading lines, and
+    bibliographic lines (**Source:**/**Author:** etc.). It detects only
+    capitalized multi-word phrases, so it CANNOT distinguish a concept from an
+    incidental place/person/product (e.g. "North America"), will not catch
+    single-word or lowercase concepts, and never scans bookkeeping files
+    (log/index/compass/threads). Advisory by design."""
+    findings = []
+
+    known = build_coverage_terms(pages)
+    owner = OWNER_NAME.lower()
+    ignore = {t.lower() for t in GAP_IGNORE_TERMS}
 
     phrase_counts: Counter[str] = Counter()
     for page in pages.values():
-        # Strip wikilinks before counting
-        stripped = WIKILINK_RE.sub("", page.body_text)
-        for m in PROPER_NOUN_RE.finditer(stripped):
-            phrase = m.group(1).strip()
-            if phrase.lower() in known or slugify(phrase) in known:
+        if not page.rel.startswith(GAP_SCAN_PREFIXES):
+            continue
+        in_fence = False
+        for line in page.body_text.splitlines():
+            if CODE_FENCE_RE.match(line):
+                in_fence = not in_fence
                 continue
-            phrase_counts[phrase] += 1
+            if in_fence:
+                continue
+            if line.lstrip().startswith("#"):       # heading line
+                continue
+            if BIBLIO_LINE_RE.match(line):          # citation metadata
+                continue
+            # Per-line so the regex can't weld phrases across a newline.
+            stripped = WIKILINK_RE.sub("", line)
+            for m in PROPER_NOUN_RE.finditer(stripped):
+                phrase = LEADING_ARTICLE_RE.sub("", m.group(1).strip()).strip()
+                if not phrase:
+                    continue
+                low = phrase.lower()
+                if low in known or slugify(phrase) in known:
+                    continue
+                if low == owner or low in ignore:
+                    continue
+                phrase_counts[phrase] += 1
 
-    # Only report phrases appearing ≥3 times (reduces noise dramatically)
+    # Only report phrases appearing often enough to matter (reduces noise).
     for phrase, count in phrase_counts.most_common():
-        if count < 3:
+        if count < GAP_MIN_COUNT:
             break
         findings.append(Finding(
             severity="advisory",
@@ -548,16 +653,22 @@ def check_missing_cross_references(pages: dict[str, WikiPage]) -> list[Finding]:
                     if p.title:
                         linked_titles.add(p.title.lower())
 
-        # Strip wikilinks before scanning prose
-        stripped = WIKILINK_RE.sub("", page.body_text).lower()
+        # Scan line by line. A mention only counts when its own line carries
+        # no wikilink — if the author already linked related context on that
+        # line, the missing link is a deliberate stylistic choice, not a gap.
+        unlinked_prose = "\n".join(
+            WIKILINK_RE.sub("", line)
+            for line in page.body_text.splitlines()
+            if not WIKILINK_RE.search(line)
+        ).lower()
 
         for title, target_rel in title_to_rel.items():
             if title in linked_titles:
                 continue
             if len(title) < 4:  # skip short titles (too noisy)
                 continue
-            # Must appear as a whole word
-            if re.search(r"\b" + re.escape(title) + r"\b", stripped):
+            # Must appear as a whole word on a line that has no wikilink
+            if re.search(r"\b" + re.escape(title) + r"\b", unlinked_prose):
                 findings.append(Finding(
                     severity="advisory",
                     check="missing_cross_references",
