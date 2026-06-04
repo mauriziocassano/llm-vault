@@ -13,12 +13,13 @@ so we skip injection. The denylist keys on CLAUDE.md's seven operations, which h
 stable named triggers — far more robust than trying to detect "is this a question."
 
 By-design trade-off: this is a denylist of *operations*, not a classifier of *questions*.
-A genuine question that happens to start with an operation verb (e.g. "compare what the
-vault says about X and Y") will be suppressed and get no protocol. That false-suppression
-is accepted as the cost of avoiding fragile question-detection — the injected text also
-self-gates ("If this prompt is a question about the vault…"), so a stray injection on a
-non-question is harmless, while a missed injection just means the agent follows the QUERY
-protocol already in CLAUDE.md.
+Only unambiguous operation triggers are suppressed (slash commands, ingest/fetch/forget/
+lint/reflect) — ones where the read-and-cite protocol would actively conflict with the
+operation. Ambiguous VIEW verbs (compare/draft/make a/timeline/slides) are intentionally
+NOT suppressed: they collide with genuine questions, and a VIEW reads vault content anyway,
+so a stray injection there is harmless and self-gated ("If this prompt is a question…").
+The injected text self-gating means an over-injection is cheap; an over-suppression of a
+real question is the costlier error, so the list errs toward injecting.
 
 Fails open: malformed stdin → exit 0 (no injection).
 """
@@ -30,11 +31,17 @@ import sys
 
 # Prompts that START with any of these are operations, not queries → suppress injection.
 # Kept in sync with CLAUDE.md's seven operations and slash commands.
+# Only UNAMBIGUOUS operation triggers belong here — ones where injecting "answer only from
+# the vault, cite everything" would actively conflict with the operation (you don't cite
+# sources while fetching URLs or ingesting). Ambiguous VIEW verbs (compare / draft / make a /
+# timeline / slides) are deliberately NOT suppressed: they collide with genuine questions
+# ("compare wedge D and E"), and since VIEW also reads vault content first, a stray injection
+# on a real view request is harmless and self-gated. Dropping them fixes the false-suppression
+# of question-shaped prompts at no real cost.
 SUPPRESS_PREFIXES = (
     "/save", "/view", "/reflect", "/forget",
     "ingest", "process inbox", "process the inbox", "fetch",
-    "forget", "remove source",
-    "make a", "compare", "draft", "timeline", "slides", "build a view",
+    "forget", "remove source", "build a view",
     "reflect", "lint", "check the vault", "vault health",
 )
 
