@@ -24,6 +24,7 @@ Output:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from collections import Counter, defaultdict
@@ -821,6 +822,112 @@ def write_state(vault: Path, findings: list[Finding], exit_code: int) -> None:
 
 # --- Orchestration ----------------------------------------------------------
 
+HOOK_SCRIPT_RE = re.compile(r"\.claude/hooks/([a-zA-Z0-9_]+\.py)")
+
+
+def _extract_hook_script_names(text: str) -> set[str]:
+    """Return the set of hook script filenames referenced as .claude/hooks/<name>.py."""
+    return set(HOOK_SCRIPT_RE.findall(text))
+
+
+def _normalize_hooks_block(settings_text: str) -> object | None:
+    """Parse settings JSON and return its `hooks` block with the `cd <path> && ` prefix
+    stripped from every command, so the tracked source (with __VAULT_ROOT__) and the
+    installed copy (with the substituted absolute path) compare equal. Returns None on
+    any parse failure."""
+    try:
+        obj = json.loads(settings_text)
+    except (ValueError, TypeError):
+        return None
+    hooks = obj.get("hooks") if isinstance(obj, dict) else None
+    if hooks is None:
+        return None
+
+    def strip_cmd(s: str) -> str:
+        # Drop a leading `cd <anything> && ` so path substitution doesn't read as drift.
+        return re.sub(r"^cd\s+\S.*?&&\s*", "", s) if isinstance(s, str) else s
+
+    def walk(node):
+        if isinstance(node, dict):
+            return {k: (strip_cmd(v) if k == "command" else walk(v)) for k, v in node.items()}
+        if isinstance(node, list):
+            return [walk(x) for x in node]
+        return node
+
+    return walk(hooks)
+
+
+def check_meta_consistency(pages: dict[str, WikiPage], vault: Path) -> list[Finding]:
+    """Hook scripts referenced in CLAUDE.md / settings.json exist in hooks/, and the
+    tracked settings.json wiring matches the installed .claude/settings.json copy.
+
+    Ported from the personal-workspace linter's meta-consistency check, adapted to this
+    linter's plain-function style. Advisory only — a drift or missing reference is a
+    maintenance signal, not a vault-content error.
+    """
+    findings: list[Finding] = []
+    hooks_dir = vault / "hooks"  # tracked source dir (.claude/hooks is a symlink to it)
+
+    # (a) referenced-but-missing
+    sources: list[tuple[str, Path]] = [
+        ("CLAUDE.md", vault / "CLAUDE.md"),
+        ("settings.json", vault / "settings.json"),
+        (".claude/settings.json", vault / ".claude" / "settings.json"),
+    ]
+    for label, path in sources:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue  # missing file → no finding
+        for name in _extract_hook_script_names(text):
+            if not (hooks_dir / name).exists():
+                findings.append(Finding(
+                    severity="advisory",
+                    check="meta_consistency",
+                    file=label,
+                    detail=f"Hook script `{name}` is referenced but missing in hooks/",
+                ))
+
+    # (b) settings.json drift (tracked source vs. installed copy)
+    tracked = vault / "settings.json"
+    installed = vault / ".claude" / "settings.json"
+    try:
+        tracked_text = tracked.read_text(encoding="utf-8")
+    except OSError:
+        tracked_text = None
+    try:
+        installed_text = installed.read_text(encoding="utf-8")
+    except OSError:
+        installed_text = None
+
+    if tracked_text is not None and installed_text is not None:
+        a = _normalize_hooks_block(tracked_text)
+        b = _normalize_hooks_block(installed_text)
+        if a is None or b is None:
+            findings.append(Finding(
+                severity="advisory",
+                check="meta_consistency",
+                file="settings.json",
+                detail="Could not parse settings.json or .claude/settings.json as JSON",
+            ))
+        elif a != b:
+            findings.append(Finding(
+                severity="advisory",
+                check="meta_consistency",
+                file=".claude/settings.json",
+                detail="Installed hooks wiring drifted from tracked settings.json; re-run init-vault.sh",
+            ))
+    elif tracked_text is not None and installed_text is None:
+        findings.append(Finding(
+            severity="advisory",
+            check="meta_consistency",
+            file=".claude/settings.json",
+            detail="settings.json exists but is not installed in .claude/; run init-vault.sh",
+        ))
+
+    return findings
+
+
 def run_lint(vault: Path, quiet: bool = False) -> int:
     if not (vault / "wiki").is_dir():
         print(f"ERROR: no wiki/ directory in {vault}", file=sys.stderr)
@@ -841,10 +948,11 @@ def run_lint(vault: Path, quiet: bool = False) -> int:
         ("view_staleness", check_view_staleness),
         ("missing_cross_references", check_missing_cross_references),
         ("thin_index_summaries", check_thin_index_summaries),
+        ("meta_consistency", check_meta_consistency),
     ]
 
     # Checks that require the vault path as a second argument
-    vault_checks = {"dead_links", "orphans", "thin_index_summaries"}
+    vault_checks = {"dead_links", "orphans", "thin_index_summaries", "meta_consistency"}
 
     findings: list[Finding] = []
     for name, fn in all_checks:

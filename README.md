@@ -40,6 +40,10 @@ of modifications made in this fork.
 │   ├── view.md           /view
 │   ├── reflect.md        /reflect
 │   └── forget.md         /forget
+├── hooks/                enforcement hooks (raw/ block, session-start + QUERY inject, index/log nudge)
+├── settings.json         hook wiring (copied to .claude/settings.json by init-vault.sh)
+├── agents/
+│   └── script-reviewer.md   fresh-eyes pre-commit review of hooks/scripts
 └── docs/examples/
     ├── research-example.md
     └── mealplan-example.md
@@ -77,9 +81,10 @@ your vault:
 
 What happens on re-run:
 
-- **Always refreshed** — `skills/` and `commands/`. This is the
-  whole point of the update: new operations, fixes, and slash
-  commands land in the vault.
+- **Always refreshed** — `skills/`, `commands/`, `hooks/`, `agents/`,
+  and the hook wiring (`settings.json` → `.claude/settings.json`).
+  This is the whole point of the update: new operations, fixes, slash
+  commands, enforcement hooks, and sub-agents land in the vault.
 - **Prompts you** — `CLAUDE.md`. Default is *keep* (answer `y` to
   overwrite with the latest template). Say yes unless you've
   customized the contract locally.

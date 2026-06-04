@@ -72,6 +72,35 @@ views are pre-compiled summaries by design.
 
 ---
 
+## Enforcement layer (hooks)
+
+Rules in this file are aspirational — an agent can forget them. Load-bearing rules
+are backed by Claude Code lifecycle hooks, which run deterministically in the harness
+regardless of agent attention. Four hooks, wired in `.claude/settings.json`:
+
+| Hook | Event | Enforces |
+|------|-------|----------|
+| `.claude/hooks/block_raw_writes.py` | PreToolUse (Edit\|Write) | Invariant #1 — hard-blocks any Edit/Write under `raw/` (exit 2). FORGET's `Bash rm` deletion is not caught, by design. |
+| `.claude/hooks/session_start.py` | SessionStart | "Session start" protocol — injects `memory/MEMORY.md`, `wiki/threads.md`, and a lint proposal when the auto-lint threshold is crossed. |
+| `.claude/hooks/inject_query_protocol.py` | UserPromptSubmit | QUERY read-protocol — injects the read-before-answer steps, suppressed when the prompt starts a named operation (slash command or operation verb). |
+| `.claude/hooks/remind_index_log.py` | PostToolUse (Edit\|Write) | Invariant #6 — nudges to update `index.md` + `log.md` after a `wiki/pages\|sources\|views` write. The linter is the deterministic backstop. |
+
+Hooks **inject** context or **hard-block**; they cannot force the agent to act on an
+injection. Source of truth: hook scripts live in the tracked top-level `hooks/` dir
+(symlinked into `.claude/hooks/`); the wiring lives in the tracked top-level
+`settings.json` and is **copied** (with the vault path substituted) into
+`.claude/settings.json` by `init-vault.sh`. The vault-linter's `meta_consistency`
+check flags missing hook references and wiring drift. Every hook fails open: a bug
+degrades to no-enforcement, never to a blocked session.
+
+**Review before commit.** A `script-reviewer` sub-agent (`.claude/agents/script-reviewer.md`,
+source in top-level `agents/`) reviews hooks and skill scripts with fresh eyes — splitting
+findings into Critical (must-fix) and Suggestions (backlog). Spawn it after writing or
+modifying any script under `hooks/` or `skills/.../scripts/`, before committing. It
+diagnoses only; it never edits.
+
+---
+
 ## Frontmatter
 
 Every file in `wiki/` has YAML frontmatter:

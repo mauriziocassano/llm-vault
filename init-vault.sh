@@ -11,9 +11,11 @@
 #   1. Creates folder structure (raw/, wiki/pages/, wiki/views/, ...)
 #   2. Installs the two skills (inbox-fetcher, vault-linter, view-builder)
 #   3. Installs four slash commands (/save, /view, /reflect, /forget)
-#   4. Writes CLAUDE.md, inbox.md, wiki/{hot,index,log}.md
-#   5. Creates AGENTS.md as a symlink to CLAUDE.md
-#   6. Optionally: git init, checks Python dependencies
+#   4. Installs enforcement hooks (.claude/hooks/ + .claude/settings.json wiring)
+#   5. Installs sub-agents (.claude/agents/, e.g. script-reviewer)
+#   6. Writes CLAUDE.md, inbox.md, wiki/{hot,index,log}.md
+#   7. Creates AGENTS.md as a symlink to CLAUDE.md
+#   8. Optionally: git init, checks Python dependencies
 #
 # Idempotent: safe to re-run. Asks before overwriting CLAUDE.md.
 
@@ -98,6 +100,8 @@ DIRS=(
     ".claude/skills/vault-linter/scripts"
     ".claude/skills/view-builder/templates"
     ".claude/commands"
+    ".claude/hooks"
+    ".claude/agents"
 )
 for d in "${DIRS[@]}"; do
     mkdir -p "$VAULT_DIR/$d"
@@ -314,6 +318,44 @@ for cmd in save view reflect forget; do
         warn "command $cmd not found in bundle"
     fi
 done
+
+# --- Enforcement hooks -----------------------------------------------------
+# Hook scripts are copied (like skills/commands) so a standalone vault is
+# self-contained. settings.json is COPIED with __VAULT_ROOT__ substituted to the
+# absolute vault path — never symlinked, so Claude Code's permission writes (which
+# land in the gitignored .claude/settings.local.json) can't pollute the tracked source.
+info "Installing enforcement hooks"
+if [ -d "$SCRIPT_DIR/hooks" ]; then
+    for hook in "$SCRIPT_DIR/hooks/"*.py; do
+        [ -e "$hook" ] || continue
+        cp "$hook" "$VAULT_DIR/.claude/hooks/$(basename "$hook")"
+        chmod +x "$VAULT_DIR/.claude/hooks/$(basename "$hook")"
+    done
+    ok "hooks: $(ls "$SCRIPT_DIR/hooks/"*.py 2>/dev/null | wc -l | tr -d ' ') script(s)"
+else
+    warn "hooks/ not found in bundle"
+fi
+
+if [ -f "$SCRIPT_DIR/settings.json" ]; then
+    sed "s|__VAULT_ROOT__|$VAULT_DIR|g" "$SCRIPT_DIR/settings.json" \
+        > "$VAULT_DIR/.claude/settings.json"
+    ok "hook wiring → .claude/settings.json"
+else
+    warn "settings.json not found in bundle (hooks will not fire)"
+fi
+
+# --- Sub-agents ------------------------------------------------------------
+# Agent definitions are read-only markdown — copied like slash commands.
+info "Installing sub-agents"
+if [ -d "$SCRIPT_DIR/agents" ]; then
+    for agent in "$SCRIPT_DIR/agents/"*.md; do
+        [ -e "$agent" ] || continue
+        cp "$agent" "$VAULT_DIR/.claude/agents/$(basename "$agent")"
+        ok "agent: $(basename "$agent" .md)"
+    done
+else
+    warn "agents/ not found in bundle"
+fi
 
 # --- Optional: git init ----------------------------------------------------
 info "Git"

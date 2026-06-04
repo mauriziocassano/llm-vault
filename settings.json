@@ -1,0 +1,48 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd __VAULT_ROOT__ && python3 .claude/hooks/session_start.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd __VAULT_ROOT__ && python3 .claude/hooks/inject_query_protocol.py"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd __VAULT_ROOT__ && python3 .claude/hooks/block_raw_writes.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd __VAULT_ROOT__ && python3 .claude/hooks/remind_index_log.py"
+          }
+        ]
+      }
+    ]
+  }
+}
